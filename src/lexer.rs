@@ -67,8 +67,13 @@ impl<'src> Lexer<'src> {
                     // 空白スキップ（全角スペースも対応）
                     self.advance_char();
                 }
-                '※' => self.lex_line_comment(),
-                '（' => self.lex_block_comment(),
+                '※' => self.lex_comment(),
+                '（' => {
+                    let start = self.pos;
+                    self.advance_char();
+                    self.tokens
+                        .push(Token::new(TokenKind::LParen, Span::new(start, self.pos)));
+                }
                 '「' => self.lex_string(),
                 '【' => {
                     let start = self.pos;
@@ -380,9 +385,16 @@ impl<'src> Lexer<'src> {
 
     // === コメント ===
 
-    fn lex_line_comment(&mut self) {
+    fn lex_comment(&mut self) {
         let start = self.pos;
         self.advance_char(); // ※ を消費
+
+        // ブロックコメント: ※（ ... ）※
+        if matches!(self.peek_char(), Some('（')) {
+            self.advance_char(); // （ を消費
+            self.lex_block_comment(start);
+            return;
+        }
 
         // 空白をスキップ
         while let Some(ch) = self.peek_char() {
@@ -407,39 +419,32 @@ impl<'src> Lexer<'src> {
         let _ = (start, content);
     }
 
-    fn lex_block_comment(&mut self) {
-        let start = self.pos;
-        self.advance_char(); // （ を消費
-
-        let mut content = String::new();
+    fn lex_block_comment(&mut self, start: usize) {
         let mut depth = 1;
 
-        while let Some(ch) = self.peek_char() {
-            if ch == '（' {
+        while !self.is_eof() {
+            if self.starts_with("※（") {
                 depth += 1;
-                content.push(ch);
-                self.advance_char();
-            } else if ch == '）' {
+                self.advance_char(); // ※
+                self.advance_char(); // （
+            } else if self.starts_with("）※") {
                 depth -= 1;
-                self.advance_char();
+                self.advance_char(); // ）
+                self.advance_char(); // ※
                 if depth == 0 {
-                    break;
+                    return;
                 }
-                content.push(ch);
             } else {
-                content.push(ch);
                 self.advance_char();
             }
         }
 
         if depth > 0 {
             self.errors.push(LexError {
-                message: "閉じられていないブロックコメント".to_string(),
+                message: "閉じられていないブロックコメント（※（...）※）".to_string(),
                 span: Span::new(start, self.pos),
             });
         }
-        // コメントはトークンとして保持しない
-        let _ = (start, content);
     }
 
     // === 識別子・キーワード ===
@@ -594,6 +599,10 @@ impl<'src> Lexer<'src> {
         // 通常の識別子
         self.tokens
             .push(Token::new(TokenKind::Identifier(word.to_string()), Span::new(byte_offset, word_end)));
+    }
+
+    fn starts_with(&self, s: &str) -> bool {
+        self.source[self.pos..].starts_with(s)
     }
 }
 
@@ -864,6 +873,18 @@ mod tests {
     }
 
     #[test]
+    fn test_block_comment_new_syntax() {
+        let kinds = token_kinds("42 ※（ コメント ）※ 43");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Integer("42".into()),
+                TokenKind::Integer("43".into())
+            ]
+        );
+    }
+
+    #[test]
     fn test_procedure_call() {
         let kinds = token_kinds("「hello」と 表示する");
         assert_eq!(
@@ -945,6 +966,26 @@ mod tests {
                 TokenKind::Identifier("名前".into()),
                 TokenKind::StringInterpEnd,
                 TokenKind::String("です".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lambda_paren_tokenized() {
+        let kinds = token_kinds("（【x:を】xと 表示する）");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::LParen,
+                TokenKind::LBracket,
+                TokenKind::Identifier("x".into()),
+                TokenKind::Colon,
+                TokenKind::Particle(Particle::Wo),
+                TokenKind::RBracket,
+                TokenKind::Identifier("x".into()),
+                TokenKind::Particle(Particle::To),
+                TokenKind::HyoujiSuru,
+                TokenKind::RParen,
             ]
         );
     }

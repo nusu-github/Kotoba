@@ -224,6 +224,9 @@ impl Parser {
             TokenKind::Tamesu => self.parse_try(start),
 
             _ => {
+                if let Some(loop_stmt) = self.try_parse_loop_statement(start)? {
+                    return Ok(loop_stmt);
+                }
                 // 識別子から始まる場合: 束縛、再束縛、手順定義、組定義、式文の候補
                 self.parse_identifier_led_statement(start)
             }
@@ -604,6 +607,139 @@ impl Parser {
         })
     }
 
+    fn try_parse_loop_statement(&mut self, start: Span) -> Result<Option<Stmt>, ParseError> {
+        let checkpoint = self.pos;
+
+        if let Some(stmt) = self.try_parse_times_loop(start)? {
+            return Ok(Some(stmt));
+        }
+        self.pos = checkpoint;
+
+        if let Some(stmt) = self.try_parse_range_loop(start)? {
+            return Ok(Some(stmt));
+        }
+        self.pos = checkpoint;
+
+        if let Some(stmt) = self.try_parse_while_loop(start)? {
+            return Ok(Some(stmt));
+        }
+        self.pos = checkpoint;
+
+        Ok(None)
+    }
+
+    fn try_parse_times_loop(&mut self, start: Span) -> Result<Option<Stmt>, ParseError> {
+        let checkpoint = self.pos;
+        let count = match self.current_kind() {
+            TokenKind::Integer(_) | TokenKind::Float(_) | TokenKind::Identifier(_) => {
+                self.parse_primary()?
+            }
+            _ => return Ok(None),
+        };
+
+        let mut matched_counter = false;
+        match self.current_kind().clone() {
+            TokenKind::Counter(c) if c == "回" => {
+                matched_counter = true;
+                self.advance();
+            }
+            TokenKind::Kai => {
+                matched_counter = true;
+                self.advance();
+            }
+            _ => {}
+        }
+
+        if !matched_counter {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+
+        self.eat(&TokenKind::KuriKaesu)?;
+        let var = self.parse_loop_var()?;
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        let end = body.span;
+        Ok(Some(Stmt {
+            kind: StmtKind::ExprStmt(Expr {
+                kind: ExprKind::Loop(Box::new(LoopKind::Times { count, var, body })),
+                span: start.merge(end),
+            }),
+            span: start.merge(end),
+        }))
+    }
+
+    fn try_parse_range_loop(&mut self, start: Span) -> Result<Option<Stmt>, ParseError> {
+        let checkpoint = self.pos;
+        let from = match self.current_kind() {
+            TokenKind::Integer(_)
+            | TokenKind::Float(_)
+            | TokenKind::Identifier(_)
+            | TokenKind::Kore
+            | TokenKind::Sore
+            | TokenKind::Are => self.parse_primary()?,
+            _ => return Ok(None),
+        };
+
+        if !matches!(self.current_kind(), TokenKind::Particle(Particle::Kara)) {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+        self.advance(); // から
+
+        let to = self.parse_primary()?;
+        self.eat(&TokenKind::Particle(Particle::Made))?;
+        self.eat(&TokenKind::KuriKaesu)?;
+        let var = self.parse_loop_var()?;
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        let end = body.span;
+        Ok(Some(Stmt {
+            kind: StmtKind::ExprStmt(Expr {
+                kind: ExprKind::Loop(Box::new(LoopKind::Range {
+                    from,
+                    to,
+                    var,
+                    body,
+                })),
+                span: start.merge(end),
+            }),
+            span: start.merge(end),
+        }))
+    }
+
+    fn try_parse_while_loop(&mut self, start: Span) -> Result<Option<Stmt>, ParseError> {
+        let checkpoint = self.pos;
+        let condition = self.parse_expr()?;
+
+        if !matches!(self.current_kind(), TokenKind::Aida) {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+        self.advance(); // 間
+        self.eat(&TokenKind::KuriKaesu)?;
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        let end = body.span;
+        Ok(Some(Stmt {
+            kind: StmtKind::ExprStmt(Expr {
+                kind: ExprKind::Loop(Box::new(LoopKind::While { condition, body })),
+                span: start.merge(end),
+            }),
+            span: start.merge(end),
+        }))
+    }
+
+    fn parse_loop_var(&mut self) -> Result<Option<String>, ParseError> {
+        if !matches!(self.current_kind(), TokenKind::LBracket) {
+            return Ok(None);
+        }
+        self.advance();
+        let (name, _) = self.eat_identifier()?;
+        self.eat(&TokenKind::RBracket)?;
+        Ok(Some(name))
+    }
+
     // === ブロック ===
 
     fn parse_block(&mut self) -> Result<Block, ParseError> {
@@ -694,32 +830,39 @@ impl Parser {
     /// 比較式 or 助詞式（手順呼び出し）
     fn parse_comparison_or_call(&mut self) -> Result<Expr, ParseError> {
         // まずプライマリ式をパースし、その後に助詞・比較・呼び出しがあるかを見る
-        let expr = self.parse_primary()?;
+        let mut expr = self.parse_primary()?;
 
         // 助数詞付き数値
         if let TokenKind::Counter(c) = self.current_kind().clone() {
             let end_span = self.current_span();
             self.advance();
             let span = expr.span.merge(end_span);
-            return Ok(Expr {
+            expr = Expr {
                 kind: ExprKind::WithCounter {
                     value: Box::new(expr),
                     counter: c,
                 },
                 span,
-            });
+            };
         }
 
         // 助詞が続く場合 → 助詞式（呼び出し）構築
-        if matches!(self.current_kind(), TokenKind::Particle(_) | TokenKind::AccessParticle) {
-            return self.parse_particle_expr(expr);
+        if matches!(self.current_kind(), TokenKind::Particle(_) | TokenKind::AccessParticle)
+            && !matches!(self.current_kind(), TokenKind::Particle(Particle::Ga))
+        {
+            expr = self.parse_particle_expr(expr)?;
+        }
+
+        // 比較は専用パスで解釈する
+        if matches!(self.current_kind(), TokenKind::Particle(Particle::Ga)) {
+            expr = self.parse_comparison_tail(expr)?;
         }
 
         // `でない` (NOT)
         if matches!(self.current_kind(), TokenKind::DeNai) {
             let end_span = self.current_span();
-            self.advance();
             let span = expr.span.merge(end_span);
+            self.advance();
             return Ok(Expr {
                 kind: ExprKind::UnaryOp {
                     op: UnaryOp::Not,
@@ -732,8 +875,103 @@ impl Parser {
         Ok(expr)
     }
 
+    fn parse_comparison_tail(&mut self, left: Expr) -> Result<Expr, ParseError> {
+        self.eat(&TokenKind::Particle(Particle::Ga))?;
+        let right = self.parse_comparison_operand()?;
+        let (op, end_span) = match self.current_kind().clone() {
+            TokenKind::Particle(Particle::Yori) => {
+                self.advance();
+                match self.current_kind().clone() {
+                    TokenKind::Identifier(w) if w == "大きい" => {
+                        let s = self.current_span();
+                        self.advance();
+                        (CompOp::Gt, s)
+                    }
+                    TokenKind::Identifier(w) if w == "小さい" => {
+                        let s = self.current_span();
+                        self.advance();
+                        (CompOp::Lt, s)
+                    }
+                    _ => {
+                        return Err(ParseError {
+                            message: "「より」の後には「大きい」または「小さい」が必要です".into(),
+                            span: self.current_span(),
+                        });
+                    }
+                }
+            }
+            TokenKind::Particle(Particle::To) => {
+                self.advance();
+                match self.current_kind().clone() {
+                    TokenKind::Identifier(w) if w == "等しい" => {
+                        let s = self.current_span();
+                        self.advance();
+                        (CompOp::Eq, s)
+                    }
+                    TokenKind::Identifier(w) if w == "等しくない" => {
+                        let s = self.current_span();
+                        self.advance();
+                        (CompOp::Ne, s)
+                    }
+                    _ => {
+                        return Err(ParseError {
+                            message: "「と」の後には「等しい」または「等しくない」が必要です".into(),
+                            span: self.current_span(),
+                        });
+                    }
+                }
+            }
+            TokenKind::Identifier(w) if w == "以上" => {
+                let s = self.current_span();
+                self.advance();
+                (CompOp::Ge, s)
+            }
+            TokenKind::Identifier(w) if w == "以下" => {
+                let s = self.current_span();
+                self.advance();
+                (CompOp::Le, s)
+            }
+            _ => {
+                return Err(ParseError {
+                    message: "比較式は「Aが Bより大きい|小さい」「Aが Bと等しい|等しくない」「Aが B以上|以下」の形が必要です".into(),
+                    span: self.current_span(),
+                });
+            }
+        };
+        let span = left.span.merge(end_span);
+        Ok(Expr {
+            kind: ExprKind::Comparison {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+            span,
+        })
+    }
+
+    fn parse_comparison_operand(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.parse_primary()?;
+        if let TokenKind::Counter(c) = self.current_kind().clone() {
+            let end_span = self.current_span();
+            let span = expr.span.merge(end_span);
+            self.advance();
+            expr = Expr {
+                kind: ExprKind::WithCounter {
+                    value: Box::new(expr),
+                    counter: c,
+                },
+                span,
+            };
+        }
+
+        if matches!(self.current_kind(), TokenKind::AccessParticle) {
+            expr = self.parse_particle_expr(expr)?;
+        }
+        Ok(expr)
+    }
+
     /// 助詞式: `(式 助詞)+ 動詞`
-    /// または比較/算術のパターンを認識
+    /// または算術のパターンを認識
     fn parse_particle_expr(&mut self, first_expr: Expr) -> Result<Expr, ParseError> {
         let mut args: Vec<ParticleArg> = Vec::new();
         let mut current_expr = first_expr;
@@ -741,109 +979,13 @@ impl Parser {
         loop {
             match self.current_kind() {
                 TokenKind::Particle(p) => {
+                    if *p == Particle::Ga && args.is_empty() {
+                        return Ok(current_expr);
+                    }
+
                     let particle = *p;
                     let particle_span = self.current_span();
                     self.advance();
-
-                    // 比較パターンの検出: `aが bより大きい`
-                    if particle == Particle::Yori {
-                        // 次に比較語がくるか確認
-                        if let TokenKind::Identifier(cmp_word) = self.current_kind().clone() {
-                            if let Some(op) = comparison_op(&cmp_word) {
-                                self.advance();
-                                let span = current_expr.span.merge(self.tokens[self.pos - 1].span);
-                                return Ok(Expr {
-                                    kind: ExprKind::Comparison {
-                                        op,
-                                        left: Box::new(current_expr),
-                                        right: Box::new(args.pop().map(|a| a.value).unwrap_or(Expr {
-                                            kind: ExprKind::None,
-                                            span,
-                                        })),
-                                    },
-                                    span,
-                                });
-                            }
-                        }
-                    }
-
-                    // `と等しい` / `と等しくない` パターン
-                    if particle == Particle::To {
-                        if let TokenKind::Identifier(next_word) = self.current_kind().clone() {
-                            if next_word == "等しい" {
-                                self.advance();
-                                let span = current_expr.span.merge(self.tokens[self.pos - 1].span);
-                                // 次の式をパース
-                                let right = self.parse_primary().unwrap_or(Expr {
-                                    kind: ExprKind::None,
-                                    span,
-                                });
-                                return Ok(Expr {
-                                    kind: ExprKind::Comparison {
-                                        op: CompOp::Eq,
-                                        left: Box::new(current_expr),
-                                        right: Box::new(right),
-                                    },
-                                    span,
-                                });
-                            } else if next_word == "等しくない" {
-                                self.advance();
-                                let span = current_expr.span.merge(self.tokens[self.pos - 1].span);
-                                let right = self.parse_primary().unwrap_or(Expr {
-                                    kind: ExprKind::None,
-                                    span,
-                                });
-                                return Ok(Expr {
-                                    kind: ExprKind::Comparison {
-                                        op: CompOp::Ne,
-                                        left: Box::new(current_expr),
-                                        right: Box::new(right),
-                                    },
-                                    span,
-                                });
-                            }
-                        }
-                    }
-
-                    // `以上` / `以下` パターン
-                    if let TokenKind::Identifier(next_word) = self.current_kind().clone() {
-                        if next_word == "以上" {
-                            self.advance();
-                            let right_expr = current_expr.clone();
-                            // args に含まれる最後の式を left にする
-                            let left = if let Some(arg) = args.pop() {
-                                arg.value
-                            } else {
-                                current_expr.clone()
-                            };
-                            let span = left.span.merge(self.tokens[self.pos - 1].span);
-                            return Ok(Expr {
-                                kind: ExprKind::Comparison {
-                                    op: CompOp::Ge,
-                                    left: Box::new(left),
-                                    right: Box::new(right_expr),
-                                },
-                                span,
-                            });
-                        } else if next_word == "以下" {
-                            self.advance();
-                            let right_expr = current_expr.clone();
-                            let left = if let Some(arg) = args.pop() {
-                                arg.value
-                            } else {
-                                current_expr.clone()
-                            };
-                            let span = left.span.merge(self.tokens[self.pos - 1].span);
-                            return Ok(Expr {
-                                kind: ExprKind::Comparison {
-                                    op: CompOp::Le,
-                                    left: Box::new(left),
-                                    right: Box::new(right_expr),
-                                },
-                                span,
-                            });
-                        }
-                    }
 
                     // 通常の助詞引数を追加
                     let arg_span = current_expr.span.merge(particle_span);
@@ -959,6 +1101,21 @@ impl Parser {
         let end_span = self.tokens[self.pos - 1].span;
         let start_span = args.first().map(|a| a.span).unwrap_or(end_span);
 
+        if callee == "訴える" {
+            if args.len() != 1 || args[0].particle != Particle::To {
+                return Err(ParseError {
+                    message: "「訴える」は「式と 訴える」の形で使います".into(),
+                    span: start_span.merge(end_span),
+                });
+            }
+            let expr = args.pop().unwrap().value;
+            let span = expr.span.merge(end_span);
+            return Ok(Expr {
+                kind: ExprKind::Throw(Box::new(expr)),
+                span,
+            });
+        }
+
         Ok(Expr {
             kind: ExprKind::Call { callee, args },
             span: start_span.merge(end_span),
@@ -975,7 +1132,6 @@ impl Parser {
                 | TokenKind::KuriKaesu
                 | TokenKind::Tsukau
                 | TokenKind::Tsukuru
-                | TokenKind::Uttaeru
         ) && !matches!(self.peek_ahead(1), TokenKind::Particle(_) | TokenKind::AccessParticle)
     }
 
@@ -1114,7 +1270,7 @@ impl Parser {
             }
             TokenKind::LBracket => self.parse_list_literal(),
             TokenKind::LBrace => self.parse_map_literal(),
-            TokenKind::LParen => self.parse_lambda(),
+            TokenKind::LParen => self.parse_paren_or_lambda(),
             TokenKind::Moshi => self.parse_if_expr(start),
             TokenKind::Identifier(name) => {
                 self.advance();
@@ -1229,6 +1385,19 @@ impl Parser {
         })
     }
 
+    fn parse_paren_or_lambda(&mut self) -> Result<Expr, ParseError> {
+        let checkpoint = self.pos;
+        self.eat(&TokenKind::LParen)?;
+        if matches!(self.current_kind(), TokenKind::LBracket) {
+            self.pos = checkpoint;
+            return self.parse_lambda();
+        }
+
+        let expr = self.parse_expr()?;
+        self.eat(&TokenKind::RParen)?;
+        Ok(expr)
+    }
+
     fn parse_lambda(&mut self) -> Result<Expr, ParseError> {
         let start = self.current_span();
         self.eat(&TokenKind::LParen)?;
@@ -1287,14 +1456,6 @@ fn arithmetic_op(word: &str) -> Option<BinOp> {
         "和" => Some(BinOp::Add),
         "差" => Some(BinOp::Sub),
         "積" => Some(BinOp::Mul),
-        _ => None,
-    }
-}
-
-fn comparison_op(word: &str) -> Option<CompOp> {
-    match word {
-        "大きい" => Some(CompOp::Gt),
-        "小さい" => Some(CompOp::Lt),
         _ => None,
     }
 }

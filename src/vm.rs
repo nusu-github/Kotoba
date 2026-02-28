@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
-use num_integer::Integer;
-
 use crate::bytecode::{Chunk, OpCode, Value};
 
 /// VM 実行時エラー
@@ -481,16 +479,38 @@ impl VM {
 
                 OpCode::Throw => {
                     let exception = self.pop_value()?;
-                    if let Some(try_frame) = self.try_stack.pop() {
-                        // スタックをtry開始時の深さに戻す
-                        self.stack.truncate(try_frame.stack_depth);
-                        // 例外値をスタックに積む
-                        self.stack.push(exception);
-                        // catchハンドラにジャンプ
-                        if let Some(frame) = self.frames.last_mut() {
-                            frame.ip = try_frame.catch_target;
+                    let mut handled = false;
+
+                    while let Some(try_frame) = self.try_stack.pop() {
+                        // tryフレームが存在するチャンクまでフレームを巻き戻す
+                        while let Some(frame) = self.frames.last() {
+                            if frame.chunk_id == try_frame.chunk_id {
+                                break;
+                            }
+                            let finished_frame = self.frames.pop().ok_or_else(|| RuntimeError {
+                                message: "フレームスタックが空です".into(),
+                            })?;
+                            let callee_pos = if finished_frame.base > 0 {
+                                finished_frame.base - 1
+                            } else {
+                                0
+                            };
+                            self.stack.truncate(callee_pos);
                         }
-                    } else {
+
+                        if let Some(frame) = self.frames.last_mut() {
+                            if frame.chunk_id == try_frame.chunk_id {
+                                // スタックをtry開始時の深さに戻し、例外値をcatchに渡す
+                                self.stack.truncate(try_frame.stack_depth);
+                                self.stack.push(exception.clone());
+                                frame.ip = try_frame.catch_target;
+                                handled = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !handled {
                         return Err(RuntimeError {
                             message: format!("捕捉されない例外: {}", exception.to_display_string()),
                         });

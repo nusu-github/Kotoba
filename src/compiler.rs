@@ -22,6 +22,13 @@ struct Local {
     depth: usize,
 }
 
+#[derive(Debug, Default)]
+struct LoopContext {
+    continue_target: usize,
+    continue_jumps: Vec<usize>,
+    break_jumps: Vec<usize>,
+}
+
 /// コンパイラ: AST → バイトコード
 pub struct Compiler {
     /// 生成されたチャンク一覧
@@ -32,6 +39,10 @@ pub struct Compiler {
     locals: Vec<Local>,
     /// スコープの深さ
     scope_depth: usize,
+    /// ループのジャンプパッチ情報
+    loop_stack: Vec<LoopContext>,
+    /// 一時変数名採番
+    temp_counter: usize,
     /// エラー一覧
     errors: Vec<CompileError>,
 }
@@ -44,6 +55,8 @@ impl Compiler {
             current_chunk_idx: 0,
             locals: Vec::new(),
             scope_depth: 0,
+            loop_stack: Vec::new(),
+            temp_counter: 0,
             errors: Vec::new(),
         }
     }
@@ -125,10 +138,26 @@ impl Compiler {
             }
 
             StmtKind::Continue | StmtKind::Break => {
-                // TODO: ループ制御のジャンプ
-                self.errors.push(CompileError {
-                    message: "「次へ」「抜ける」は現在未実装です".into(),
-                });
+                let jump = self.emit(OpCode::Jump(0));
+                if let Some(ctx) = self.loop_stack.last_mut() {
+                    match &stmt.kind {
+                        StmtKind::Continue => ctx.continue_jumps.push(jump),
+                        StmtKind::Break => ctx.break_jumps.push(jump),
+                        _ => {}
+                    }
+                } else {
+                    self.errors.push(CompileError {
+                        message: match &stmt.kind {
+                            StmtKind::Continue => {
+                                "「次へ」はループの中でのみ使えます".into()
+                            }
+                            StmtKind::Break => {
+                                "「抜ける」はループの中でのみ使えます".into()
+                            }
+                            _ => unreachable!(),
+                        },
+                    });
+                }
             }
 
             StmtKind::Use { module, .. } => {
@@ -183,10 +212,8 @@ impl Compiler {
             self.add_local(param_name);
         }
 
-        // 本体のコンパイル
-        for stmt in &body.statements {
-            self.compile_stmt(stmt);
-        }
+        // 本体のコンパイル（最後の式の値を残す）
+        self.compile_block(body, true);
 
         // 暗黙の return (最後の値を返す)
         // 最後の命令が Return でなければ、PushNone + Return を追加
@@ -390,6 +417,10 @@ impl Compiler {
                 self.compile_if(condition, then_block, elif_clauses, else_block);
             }
 
+            ExprKind::Loop(kind) => {
+                self.compile_loop(kind);
+            }
+
             ExprKind::Lambda { params, body } => {
                 let name = "<無名手順>";
                 self.compile_proc_def(name, params, body);
@@ -401,49 +432,44 @@ impl Compiler {
                 let _ = counter;
             }
 
-            ExprKind::Throw(expr) => {
-                self.compile_expr(expr);
-                // TODO: 例外機構
-                self.emit(OpCode::Print);
-                self.emit(OpCode::Halt);
-            }
-
             ExprKind::TryCatch { body, catch_param, catch_body, finally_body } => {
                 // SetupTry: catchラベルは後でパッチ
                 let setup_pos = self.emit(OpCode::SetupTry(0));
 
                 // try ボディ
-                self.compile_block(body);
+                self.compile_block(body, true);
                 self.emit(OpCode::EndTry);
-                let jump_end = self.emit(OpCode::Jump(0));
+                let jump_finally = self.emit(OpCode::Jump(0));
 
                 // catch ラベル
                 let catch_pos = self.chunks[self.current_chunk_idx].current_pos();
                 self.chunks[self.current_chunk_idx].patch_jump(setup_pos, catch_pos);
 
-                // catchパラメータがあればローカル変数に保存、なければ例外値を破棄
-                if let Some(param) = catch_param {
+                self.begin_scope();
+                // catchパラメータがあればローカル変数に保存
+                if let Some(param) = catch_param.as_ref() {
                     let idx = self.add_local(param.clone());
-                    self.emit(OpCode::StoreLocal(idx));
-                    self.emit(OpCode::Pop);
+                    self.emit(OpCode::StoreLocal(idx)); // 例外値を捕捉
+                    self.emit(OpCode::Pop); // StoreLocalが参照するスタック値を明示的に消費
                 } else {
+                    // catchパラメータを使わない場合は例外値を破棄
                     self.emit(OpCode::Pop);
                 }
 
                 if let Some(catch) = catch_body {
-                    self.compile_block(catch);
+                    self.compile_block(catch, true);
                 } else {
                     self.emit(OpCode::PushNone);
                 }
+                self.end_scope();
 
-                // end ラベル
-                let end_pos = self.chunks[self.current_chunk_idx].current_pos();
-                self.chunks[self.current_chunk_idx].patch_jump(jump_end, end_pos);
+                // finally ラベル
+                let finally_pos = self.chunks[self.current_chunk_idx].current_pos();
+                self.chunks[self.current_chunk_idx].patch_jump(jump_finally, finally_pos);
 
                 // finally（必ず行う）ブロックがあれば実行し、値は破棄
                 if let Some(finally) = finally_body {
-                    self.compile_block(finally);
-                    self.emit(OpCode::Pop);
+                    self.compile_block(finally, false);
                 }
             }
 
@@ -453,7 +479,6 @@ impl Compiler {
             }
 
             ExprKind::Match { .. }
-            | ExprKind::Loop(_)
             | ExprKind::TeChain { .. }
             | ExprKind::BranchChain { .. }
             | ExprKind::MethodCall { .. }
@@ -529,7 +554,7 @@ impl Compiler {
         let then_jump = self.emit(OpCode::JumpIfFalse(0));
         self.emit(OpCode::Pop);
 
-        self.compile_block(then_block);
+        self.compile_block(then_block, true);
 
         let mut end_jumps = vec![];
         end_jumps.push(self.emit(OpCode::Jump(0)));
@@ -545,7 +570,7 @@ impl Compiler {
             current_false = self.emit(OpCode::JumpIfFalse(0));
             self.emit(OpCode::Pop);
 
-            self.compile_block(elif_block);
+            self.compile_block(elif_block, true);
             end_jumps.push(self.emit(OpCode::Jump(0)));
         }
 
@@ -554,7 +579,7 @@ impl Compiler {
         self.emit(OpCode::Pop);
 
         if let Some(else_blk) = else_block {
-            self.compile_block(else_blk);
+            self.compile_block(else_blk, true);
         } else {
             self.emit(OpCode::PushNone);
         }
@@ -565,15 +590,14 @@ impl Compiler {
         }
     }
 
-    fn compile_block(&mut self, block: &Block) {
+    fn compile_block(&mut self, block: &Block, keep_last_value: bool) {
         self.begin_scope();
         let stmt_count = block.statements.len();
         for (i, stmt) in block.statements.iter().enumerate() {
             self.compile_stmt(stmt);
 
-            // expression-based: ブロックの最後の式の値を残す
-            // ただし ExprStmt の Pop を最後の式だけ取り消す
-            if i == stmt_count - 1 {
+            // expression-based: ブロックの最後の式の値を残す（値モードのみ）
+            if keep_last_value && i == stmt_count - 1 {
                 if let StmtKind::ExprStmt(_) = &stmt.kind {
                     // 最後の stmt で Pop が追加されているので取り消す
                     if let Some(OpCode::Pop) = self.chunks[self.current_chunk_idx].code.last() {
@@ -583,11 +607,182 @@ impl Compiler {
             }
         }
 
-        if stmt_count == 0 {
+        if keep_last_value && stmt_count == 0 {
             self.emit(OpCode::PushNone);
         }
 
         self.end_scope();
+    }
+
+    fn compile_loop(&mut self, kind: &LoopKind) {
+        match kind {
+            LoopKind::Times { count, var, body } => self.compile_times_loop(count, var, body),
+            LoopKind::Range {
+                from,
+                to,
+                var,
+                body,
+            } => self.compile_range_loop(from, to, var, body),
+            LoopKind::While { condition, body } => self.compile_while_loop(condition, body),
+            LoopKind::ForEach { .. } => {
+                self.errors.push(CompileError {
+                    message: "「それぞれについて」は現在未実装です".into(),
+                });
+            }
+        }
+        // ループ式の値は常に 無
+        self.emit(OpCode::PushNone);
+    }
+
+    fn compile_times_loop(&mut self, count: &Expr, var: &Option<String>, body: &Block) {
+        let count_name = self.fresh_temp("__回数");
+        let index_name = self.fresh_temp("__回数i");
+
+        self.compile_expr(count);
+        self.emit(OpCode::StoreGlobal(count_name.clone()));
+        self.emit(OpCode::Pop);
+
+        let one_const = self.add_constant(Value::Integer(BigInt::from(1)));
+        self.emit(OpCode::Constant(one_const));
+        self.emit(OpCode::StoreGlobal(index_name.clone()));
+        self.emit(OpCode::Pop);
+
+        let loop_start = self.current_chunk().current_pos();
+        self.emit(OpCode::LoadGlobal(index_name.clone()));
+        self.emit(OpCode::LoadGlobal(count_name.clone()));
+        self.emit(OpCode::Greater);
+        let jump_body = self.emit(OpCode::JumpIfFalse(0));
+        self.emit(OpCode::Pop);
+        let jump_exit = self.emit(OpCode::Jump(0));
+
+        let body_start = self.current_chunk().current_pos();
+        self.current_chunk().patch_jump(jump_body, body_start);
+        self.emit(OpCode::Pop);
+
+        self.loop_stack.push(LoopContext::default());
+        if let Some(loop_var) = var {
+            self.emit(OpCode::LoadGlobal(index_name.clone()));
+            if let Some(idx) = self.resolve_local(loop_var) {
+                self.emit(OpCode::StoreLocal(idx));
+            } else {
+                self.emit(OpCode::StoreGlobal(loop_var.clone()));
+            }
+            self.emit(OpCode::Pop);
+        }
+        self.compile_block(body, false);
+
+        let continue_target = self.current_chunk().current_pos();
+        if let Some(ctx) = self.loop_stack.last_mut() {
+            ctx.continue_target = continue_target;
+        }
+
+        self.emit(OpCode::LoadGlobal(index_name.clone()));
+        let one_const = self.add_constant(Value::Integer(BigInt::from(1)));
+        self.emit(OpCode::Constant(one_const));
+        self.emit(OpCode::Add);
+        self.emit(OpCode::StoreGlobal(index_name));
+        self.emit(OpCode::Pop);
+        self.emit(OpCode::Jump(loop_start));
+
+        let exit_pos = self.current_chunk().current_pos();
+        self.current_chunk().patch_jump(jump_exit, exit_pos);
+        self.patch_loop_control(exit_pos);
+    }
+
+    fn compile_range_loop(
+        &mut self,
+        from: &Expr,
+        to: &Expr,
+        var: &Option<String>,
+        body: &Block,
+    ) {
+        let end_name = self.fresh_temp("__範囲終");
+        let index_name = self.fresh_temp("__範囲i");
+
+        self.compile_expr(to);
+        self.emit(OpCode::StoreGlobal(end_name.clone()));
+        self.emit(OpCode::Pop);
+
+        self.compile_expr(from);
+        self.emit(OpCode::StoreGlobal(index_name.clone()));
+        self.emit(OpCode::Pop);
+
+        let loop_start = self.current_chunk().current_pos();
+        self.emit(OpCode::LoadGlobal(index_name.clone()));
+        self.emit(OpCode::LoadGlobal(end_name.clone()));
+        self.emit(OpCode::Greater);
+        let jump_body = self.emit(OpCode::JumpIfFalse(0));
+        self.emit(OpCode::Pop);
+        let jump_exit = self.emit(OpCode::Jump(0));
+
+        let body_start = self.current_chunk().current_pos();
+        self.current_chunk().patch_jump(jump_body, body_start);
+        self.emit(OpCode::Pop);
+
+        self.loop_stack.push(LoopContext::default());
+        if let Some(loop_var) = var {
+            self.emit(OpCode::LoadGlobal(index_name.clone()));
+            if let Some(idx) = self.resolve_local(loop_var) {
+                self.emit(OpCode::StoreLocal(idx));
+            } else {
+                self.emit(OpCode::StoreGlobal(loop_var.clone()));
+            }
+            self.emit(OpCode::Pop);
+        }
+        self.compile_block(body, false);
+
+        let continue_target = self.current_chunk().current_pos();
+        if let Some(ctx) = self.loop_stack.last_mut() {
+            ctx.continue_target = continue_target;
+        }
+
+        self.emit(OpCode::LoadGlobal(index_name.clone()));
+        let one_const = self.add_constant(Value::Integer(BigInt::from(1)));
+        self.emit(OpCode::Constant(one_const));
+        self.emit(OpCode::Add);
+        self.emit(OpCode::StoreGlobal(index_name));
+        self.emit(OpCode::Pop);
+        self.emit(OpCode::Jump(loop_start));
+
+        let exit_pos = self.current_chunk().current_pos();
+        self.current_chunk().patch_jump(jump_exit, exit_pos);
+        self.patch_loop_control(exit_pos);
+    }
+
+    fn compile_while_loop(&mut self, condition: &Expr, body: &Block) {
+        let loop_start = self.current_chunk().current_pos();
+        self.compile_expr(condition);
+
+        let jump_body = self.emit(OpCode::JumpIfTrue(0));
+        self.emit(OpCode::Pop);
+        let jump_exit = self.emit(OpCode::Jump(0));
+
+        let body_start = self.current_chunk().current_pos();
+        self.current_chunk().patch_jump(jump_body, body_start);
+        self.emit(OpCode::Pop);
+
+        self.loop_stack.push(LoopContext {
+            continue_target: loop_start,
+            continue_jumps: Vec::new(),
+            break_jumps: Vec::new(),
+        });
+        self.compile_block(body, false);
+        self.emit(OpCode::Jump(loop_start));
+
+        let exit_pos = self.current_chunk().current_pos();
+        self.current_chunk().patch_jump(jump_exit, exit_pos);
+        self.patch_loop_control(exit_pos);
+    }
+
+    fn patch_loop_control(&mut self, exit_pos: usize) {
+        if let Some(ctx) = self.loop_stack.pop() {
+            for jump in ctx.continue_jumps {
+                self.current_chunk().patch_jump(jump, ctx.continue_target);
+            }
+            for jump in ctx.break_jumps {
+                self.current_chunk().patch_jump(jump, exit_pos);
+            }
+        }
     }
 
     // === スコープ管理 ===
@@ -626,6 +821,12 @@ impl Compiler {
             }
         }
         None
+    }
+
+    fn fresh_temp(&mut self, prefix: &str) -> String {
+        let id = self.temp_counter;
+        self.temp_counter += 1;
+        format!("{prefix}_{id}")
     }
 }
 
