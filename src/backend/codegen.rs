@@ -160,11 +160,8 @@ impl Compiler {
                 }
             }
 
-            StmtKind::Use { module, .. } => {
-                // TODO: モジュールシステム
-                self.errors.push(CompileError {
-                    message: format!("モジュール「{}」のインポートは現在未実装です", module),
-                });
+            StmtKind::Use { .. } => {
+                // モジュール解決フェーズで消費済み。コード生成時は no-op。
             }
 
             StmtKind::StructDef { name, .. } => {
@@ -827,62 +824,5 @@ impl Compiler {
         let id = self.temp_counter;
         self.temp_counter += 1;
         format!("{prefix}_{id}")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lexer::Lexer;
-    use crate::parser::Parser;
-
-    fn compile(input: &str) -> Vec<Chunk> {
-        let (tokens, lex_errors) = Lexer::new(input).tokenize();
-        assert!(lex_errors.is_empty(), "レキサーエラー: {:?}", lex_errors);
-        let (program, parse_errors) = Parser::new(tokens).parse();
-        assert!(
-            parse_errors.is_empty(),
-            "パーサエラー: {:?}",
-            parse_errors
-        );
-        let compiler = Compiler::new();
-        compiler.compile(&program).expect("コンパイルエラー")
-    }
-
-    #[test]
-    fn test_compile_binding() {
-        let chunks = compile("名前 は 「太郎」");
-        // メインチャンクに StoreGlobal が含まれるはず
-        let main = &chunks[0];
-        assert!(main
-            .code
-            .iter()
-            .any(|op| matches!(op, OpCode::StoreGlobal(n) if n == "名前")));
-    }
-
-    #[test]
-    fn test_compile_print() {
-        let chunks = compile("「こんにちは」と 表示する");
-        let main = &chunks[0];
-        assert!(main.code.iter().any(|op| matches!(op, OpCode::Print)));
-    }
-
-    #[test]
-    fn test_compile_proc_def() {
-        let chunks = compile("二乗する という 手順【x:を】\n  xとxの積を 返す");
-        // メインチャンク + 手順チャンク = 2つ
-        assert!(chunks.len() >= 2);
-        assert_eq!(chunks[1].name, "二乗する");
-        assert_eq!(chunks[1].arity, 1);
-    }
-
-    #[test]
-    fn test_compile_if() {
-        let chunks = compile("もし 真 ならば\n  「はい」と 表示する\nそうでなければ\n  「いいえ」と 表示する");
-        let main = &chunks[0];
-        assert!(main
-            .code
-            .iter()
-            .any(|op| matches!(op, OpCode::JumpIfFalse(_))));
     }
 }

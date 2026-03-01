@@ -116,6 +116,12 @@ pub enum TokenKind {
     Koko,
     /// そこ
     Soko,
+    /// しながら（将来予約）
+    Shinagara,
+    /// 待つ（将来予約）
+    Matsu,
+    /// 背景で（将来予約）
+    Haikeide,
 
     // === 記号 ===
     /// 【

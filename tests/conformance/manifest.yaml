@@ -1,0 +1,43 @@
+cases:
+  - id: CHECK-ACCEPT-001
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: CHECK-ACCEPT-002
+    mode: check
+    expect: accept
+    input: |
+      挨拶する という 手順【名前:を】
+        名前を 返す
+
+  - id: CHECK-REJECT-001
+    mode: check
+    expect: reject
+    input: "@"
+
+  - id: CHECK-REJECT-002
+    mode: check
+    expect: reject
+    input: |
+      これ
+
+  - id: CHECK-REJECT-003
+    mode: check
+    expect: reject
+    input: |
+      しながら
+
+  - id: RUN-ACCEPT-001
+    mode: run
+    expect: accept
+    input: |
+      x は 3
+      y は 4
+      xとyの和と 表示する
+
+  - id: RUN-REJECT-001
+    mode: run
+    expect: reject
+    input: |
+      「だめ」と 訴える

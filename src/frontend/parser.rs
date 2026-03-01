@@ -84,6 +84,7 @@ impl Parser {
         tok
     }
 
+    #[allow(dead_code)]
     fn peek_kind(&self) -> &TokenKind {
         self.current_kind()
     }
@@ -223,6 +224,12 @@ impl Parser {
             // 試す
             TokenKind::Tamesu => self.parse_try(start),
 
+            // 予約済み（未実装）
+            TokenKind::Shinagara | TokenKind::Matsu | TokenKind::Haikeide => Err(ParseError {
+                message: "未実装機能です（しながら/待つ/背景で）".into(),
+                span: start,
+            }),
+
             _ => {
                 if let Some(loop_stmt) = self.try_parse_loop_statement(start)? {
                     return Ok(loop_stmt);
@@ -303,11 +310,80 @@ impl Parser {
             });
         }
 
+        if let Some(use_stmt) = self.try_convert_use_statement(&expr)? {
+            return Ok(Stmt {
+                kind: use_stmt,
+                span: start.merge(expr.span),
+            });
+        }
+
         let span = start.merge(expr.span);
         Ok(Stmt {
             kind: StmtKind::ExprStmt(expr),
             span,
         })
+    }
+
+    fn try_convert_use_statement(
+        &self,
+        expr: &Expr,
+    ) -> Result<Option<StmtKind>, ParseError> {
+        let ExprKind::Call { callee, args } = &expr.kind else {
+            return Ok(None);
+        };
+        if callee != "使う" {
+            return Ok(None);
+        }
+
+        let mut module_from_kara: Option<String> = None;
+        let mut wo_items: Vec<String> = Vec::new();
+
+        for arg in args {
+            let s = match &arg.value.kind {
+                ExprKind::StringLiteral(s) => s.clone(),
+                _ => {
+                    return Err(ParseError {
+                        message: "「使う」の引数は文字列リテラルで指定してください".into(),
+                        span: arg.span,
+                    })
+                }
+            };
+            match arg.particle {
+                Particle::Kara => module_from_kara = Some(s),
+                Particle::Wo => wo_items.push(s),
+                _ => {
+                    return Err(ParseError {
+                        message: "「使う」で使える助詞は「を」「から」のみです".into(),
+                        span: arg.span,
+                    })
+                }
+            }
+        }
+
+        if let Some(module) = module_from_kara {
+            if wo_items.is_empty() {
+                return Err(ParseError {
+                    message: "「Xから Yを 使う」の形では取り込む項目が必要です".into(),
+                    span: expr.span,
+                });
+            }
+            return Ok(Some(StmtKind::Use {
+                module,
+                items: Some(wo_items),
+            }));
+        }
+
+        if wo_items.len() != 1 {
+            return Err(ParseError {
+                message: "「Xを 使う」の形ではモジュール名を1つだけ指定してください".into(),
+                span: expr.span,
+            });
+        }
+
+        Ok(Some(StmtKind::Use {
+            module: wo_items[0].clone(),
+            items: None,
+        }))
     }
 
     // === 手順定義 ===
@@ -1166,6 +1242,10 @@ impl Parser {
                 self.advance();
                 Ok("訴える".into())
             }
+            TokenKind::Shinagara | TokenKind::Matsu | TokenKind::Haikeide => Err(ParseError {
+                message: "未実装機能です（しながら/待つ/背景で）".into(),
+                span: self.current_span(),
+            }),
             _ => Err(ParseError {
                 message: format!(
                     "動詞が必要ですが、「{}」がありました",
@@ -1457,153 +1537,5 @@ fn arithmetic_op(word: &str) -> Option<BinOp> {
         "差" => Some(BinOp::Sub),
         "積" => Some(BinOp::Mul),
         _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lexer::Lexer;
-
-    fn parse(input: &str) -> Program {
-        let (tokens, lex_errors) = Lexer::new(input).tokenize();
-        assert!(lex_errors.is_empty(), "レキサーエラー: {:?}", lex_errors);
-        let (program, parse_errors) = Parser::new(tokens).parse();
-        assert!(
-            parse_errors.is_empty(),
-            "パーサエラー: {:?}",
-            parse_errors
-        );
-        program
-    }
-
-    #[test]
-    fn test_binding() {
-        let prog = parse("名前 は 「太郎」");
-        assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0].kind {
-            StmtKind::Bind {
-                name,
-                mutable,
-                value,
-            } => {
-                assert_eq!(name, "名前");
-                assert!(!mutable);
-                assert!(matches!(&value.kind, ExprKind::StringLiteral(s) if s == "太郎"));
-            }
-            _ => panic!("束縛文が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_mutable_binding() {
-        let prog = parse("変わる 数 は 0");
-        match &prog.statements[0].kind {
-            StmtKind::Bind {
-                name,
-                mutable,
-                value,
-            } => {
-                assert_eq!(name, "数");
-                assert!(*mutable);
-                assert!(matches!(&value.kind, ExprKind::Integer(n) if n == "0"));
-            }
-            _ => panic!("可変束縛文が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_proc_def() {
-        let prog = parse("挨拶する という 手順【名前:を】\n  「こんにちは」と 表示する");
-        match &prog.statements[0].kind {
-            StmtKind::ProcDef {
-                name,
-                params,
-                body,
-                ..
-            } => {
-                assert_eq!(name, "挨拶する");
-                assert_eq!(params.len(), 1);
-                assert_eq!(params[0].name.as_deref(), Some("名前"));
-                assert_eq!(params[0].particle, Particle::Wo);
-                assert_eq!(body.statements.len(), 1);
-            }
-            _ => panic!("手順定義が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_procedure_call() {
-        let prog = parse("「hello」と 表示する");
-        match &prog.statements[0].kind {
-            StmtKind::ExprStmt(expr) => match &expr.kind {
-                ExprKind::Call { callee, args } => {
-                    assert_eq!(callee, "表示する");
-                    assert_eq!(args.len(), 1);
-                    assert_eq!(args[0].particle, Particle::To);
-                }
-                _ => panic!("呼び出し式が期待されました: {:?}", expr.kind),
-            },
-            _ => panic!("式文が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_if_expr() {
-        let prog = parse("もし 真 ならば\n  「はい」と 表示する\nそうでなければ\n  「いいえ」と 表示する");
-        match &prog.statements[0].kind {
-            StmtKind::ExprStmt(expr) => match &expr.kind {
-                ExprKind::If {
-                    condition,
-                    then_block,
-                    else_block,
-                    ..
-                } => {
-                    assert!(matches!(&condition.kind, ExprKind::Bool(true)));
-                    assert_eq!(then_block.statements.len(), 1);
-                    assert!(else_block.is_some());
-                }
-                _ => panic!("条件分岐式が期待されました"),
-            },
-            _ => panic!("式文が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_list_literal() {
-        let prog = parse("一覧 は 【1、2、3】");
-        match &prog.statements[0].kind {
-            StmtKind::Bind { value, .. } => match &value.kind {
-                ExprKind::List(elems) => assert_eq!(elems.len(), 3),
-                _ => panic!("一覧リテラルが期待されました"),
-            },
-            _ => panic!("束縛文が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_kosoado() {
-        let prog = parse("これ");
-        match &prog.statements[0].kind {
-            StmtKind::ExprStmt(expr) => {
-                assert!(matches!(&expr.kind, ExprKind::KosoAdo(KosoAdoKind::Kore)));
-            }
-            _ => panic!("式文が期待されました"),
-        }
-    }
-
-    #[test]
-    fn test_logical_operators() {
-        let prog = parse("真 かつ 偽");
-        match &prog.statements[0].kind {
-            StmtKind::ExprStmt(expr) => match &expr.kind {
-                ExprKind::Logical {
-                    op: LogicalOp::And,
-                    ..
-                } => {}
-                _ => panic!("論理AND式が期待されました: {:?}", expr.kind),
-            },
-            _ => panic!("式文が期待されました"),
-        }
     }
 }

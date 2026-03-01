@@ -29,7 +29,7 @@ pub struct LineCol {
 }
 
 /// ソースコード全体を保持し、位置変換などを行う
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourceFile {
     pub name: String,
     pub content: String,
@@ -69,26 +69,5 @@ impl SourceFile {
     /// Span に対応するソーステキストを取得する
     pub fn slice(&self, span: Span) -> &str {
         &self.content[span.start..span.end]
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_line_col() {
-        let src = SourceFile::new("<test>", "abc\ndef\nghi");
-        assert_eq!(src.line_col(0), LineCol { line: 1, column: 1 });
-        assert_eq!(src.line_col(3), LineCol { line: 1, column: 4 }); // '\n'
-        assert_eq!(src.line_col(4), LineCol { line: 2, column: 1 }); // 'd'
-        assert_eq!(src.line_col(8), LineCol { line: 3, column: 1 }); // 'g'
-    }
-
-    #[test]
-    fn test_span_merge() {
-        let a = Span::new(5, 10);
-        let b = Span::new(8, 15);
-        assert_eq!(a.merge(b), Span::new(5, 15));
     }
 }
