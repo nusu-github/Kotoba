@@ -1,6 +1,10 @@
 use crate::ast::*;
+use crate::frontend::grammar::normalize_token_stream;
 use crate::source::Span;
 use crate::token::{Particle, Token, TokenKind};
+use tracing::instrument;
+
+const DEFAULT_PARSE_STEP_LIMIT: usize = 500_000;
 
 /// パースエラー
 #[derive(Debug, Clone)]
@@ -20,6 +24,7 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     errors: Vec<ParseError>,
+    step_limit: usize,
 }
 
 impl Parser {
@@ -28,17 +33,46 @@ impl Parser {
             tokens,
             pos: 0,
             errors: Vec::new(),
+            step_limit: resolve_parse_step_limit(),
         }
     }
 
     /// プログラム全体をパースする
+    #[instrument(skip(self))]
     pub fn parse(mut self) -> (Program, Vec<ParseError>) {
+        let normalized = normalize_token_stream(self.tokens);
+        self.tokens = normalized.tokens;
+        self.errors
+            .extend(normalized.errors.into_iter().map(|error| ParseError {
+                message: error.message,
+                span: error.span,
+            }));
         let start_span = self.current_span();
         let mut statements = Vec::new();
+        let mut safety_steps = 0usize;
 
         self.skip_newlines();
 
         while !self.is_at_end() {
+            safety_steps = safety_steps.saturating_add(1);
+            if safety_steps > self.step_limit {
+                self.errors.push(ParseError {
+                    message: format!(
+                        "構文解析回数が上限を超えたため停止しました（上限: {}）",
+                        self.step_limit
+                    ),
+                    span: self.current_span(),
+                });
+                break;
+            }
+
+            if matches!(self.current_kind(), TokenKind::Dedent) {
+                self.advance();
+                self.skip_newlines();
+                continue;
+            }
+
+            let before_pos = self.pos;
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),
                 Err(e) => {
@@ -47,6 +81,14 @@ impl Parser {
                 }
             }
             self.skip_newlines();
+
+            if self.pos == before_pos && !self.is_at_end() {
+                self.errors.push(ParseError {
+                    message: "構文解析が進行しないため、この位置で解析を打ち切りました".into(),
+                    span: self.current_span(),
+                });
+                self.advance();
+            }
         }
 
         let end_span = self.current_span();
@@ -142,7 +184,10 @@ impl Parser {
                 TokenKind::Newline | TokenKind::Eof => {
                     break;
                 }
-                TokenKind::Dedent => break,
+                TokenKind::Dedent => {
+                    self.advance();
+                    break;
+                }
                 _ => {
                     self.advance();
                 }
@@ -167,6 +212,12 @@ impl Parser {
                     StmtKind::ProcDef { is_public, .. }
                     | StmtKind::StructDef { is_public, .. }
                     | StmtKind::TraitDef { is_public, .. } => {
+                        if *is_public {
+                            return Err(ParseError {
+                                message: "「公開」は重複指定できません".into(),
+                                span: start,
+                            });
+                        }
                         *is_public = true;
                     }
                     _ => {
@@ -183,8 +234,22 @@ impl Parser {
             // 変わる 名前 は 式（可変束縛）
             TokenKind::Kawaru => {
                 self.advance();
-                let (name, _) = self.eat_identifier()?;
-                self.eat(&TokenKind::Ha)?;
+                let (raw_name, _) = self.eat_identifier()?;
+                let name = if matches!(self.current_kind(), TokenKind::Ha) {
+                    self.eat(&TokenKind::Ha)?;
+                    raw_name
+                } else if let Some(stripped) = raw_name.strip_suffix('は') {
+                    if stripped.is_empty() {
+                        return Err(ParseError {
+                            message: "可変束縛の名前が必要です".into(),
+                            span: start,
+                        });
+                    }
+                    stripped.to_string()
+                } else {
+                    self.eat(&TokenKind::Ha)?;
+                    unreachable!()
+                };
                 let value = self.parse_expr()?;
                 let span = start.merge(value.span);
                 Ok(Stmt {
@@ -265,10 +330,39 @@ impl Parser {
 
         // まず識別子と「は」のパターンをチェック
         if let TokenKind::Identifier(_) = self.current_kind() {
+            if let Some(trait_impl) = self.try_parse_trait_impl_statement(start)? {
+                return Ok(trait_impl);
+            }
+
+            // `人は 表示できる を持つ` は特性実装ヘッダ。
+            // 本体ブロックがない場合は明示エラーにする。
+            let looks_like_trait_impl_header = matches!(self.peek_ahead(1), TokenKind::Ha)
+                && matches!(self.peek_ahead(2), TokenKind::Identifier(_))
+                && matches!(self.peek_ahead(3), TokenKind::Particle(Particle::Wo))
+                && (matches!(self.peek_ahead(4), TokenKind::Motsu)
+                    || matches!(self.peek_ahead(4), TokenKind::Identifier(s) if s == "持つ"));
+            let has_impl_block = matches!(self.peek_ahead(5), TokenKind::Newline)
+                && matches!(self.peek_ahead(6), TokenKind::Indent);
+            if looks_like_trait_impl_header && !has_impl_block {
+                return Err(ParseError {
+                    message: "特性実装には本体ブロックが必要です".into(),
+                    span: start,
+                });
+            }
+
             // 名前 は 式（束縛）
             if matches!(self.peek_ahead(1), TokenKind::Ha) {
                 let (name, _) = self.eat_identifier()?;
                 self.eat(&TokenKind::Ha)?;
+
+                if matches!(self.current_kind(), TokenKind::Identifier(_))
+                    && matches!(self.peek_ahead(1), TokenKind::Identifier(s) if s == "を持つ")
+                {
+                    return Err(ParseError {
+                        message: "特性実装には本体ブロックが必要です".into(),
+                        span: start,
+                    });
+                }
                 let value = self.parse_expr()?;
                 let span = start.merge(value.span);
                 return Ok(Stmt {
@@ -330,11 +424,103 @@ impl Parser {
             });
         }
 
+        if let ExprKind::Identifier(name) = &expr.kind {
+            if !name.ends_with('は') && matches!(self.current_kind(), TokenKind::String(_)) {
+                return Err(ParseError {
+                    message:
+                        "文の区切りが必要です（「。」「改行」または適切な助詞を入れてください）"
+                            .into(),
+                    span: self.current_span(),
+                });
+            }
+        }
+
         let span = start.merge(expr.span);
         Ok(Stmt {
             kind: StmtKind::ExprStmt(expr),
             span,
         })
+    }
+
+    fn try_parse_trait_impl_statement(&mut self, start: Span) -> Result<Option<Stmt>, ParseError> {
+        let checkpoint = self.pos;
+        let (raw_type_name, _) = match self.current_kind().clone() {
+            TokenKind::Identifier(name) => {
+                self.advance();
+                (name, start)
+            }
+            _ => return Ok(None),
+        };
+
+        let type_name = if matches!(self.current_kind(), TokenKind::Ha) {
+            self.advance();
+            raw_type_name
+        } else if let Some(stripped) = raw_type_name.strip_suffix('は') {
+            if stripped.is_empty() {
+                self.pos = checkpoint;
+                return Ok(None);
+            }
+            stripped.to_string()
+        } else {
+            self.pos = checkpoint;
+            return Ok(None);
+        };
+
+        let trait_name = match self.current_kind().clone() {
+            TokenKind::Identifier(name) => {
+                self.advance();
+                name
+            }
+            _ => {
+                self.pos = checkpoint;
+                return Ok(None);
+            }
+        };
+
+        let has_impl_marker = if matches!(self.current_kind(), TokenKind::Particle(Particle::Wo)) {
+            self.advance();
+            match self.current_kind().clone() {
+                TokenKind::Motsu => {
+                    self.advance();
+                    true
+                }
+                TokenKind::Identifier(s) if s == "持つ" => {
+                    self.advance();
+                    true
+                }
+                _ => false,
+            }
+        } else if matches!(self.current_kind(), TokenKind::Identifier(s) if s == "を持つ") {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        if !has_impl_marker {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+
+        self.skip_newlines();
+        if !matches!(self.current_kind(), TokenKind::Indent) {
+            return Err(ParseError {
+                message: "特性実装には本体ブロックが必要です".into(),
+                span: start,
+            });
+        }
+        let body = self.parse_block()?;
+        let body_span = body.span;
+        let methods = body.statements;
+
+        Ok(Some(Stmt {
+            kind: StmtKind::TraitImpl {
+                type_name,
+                trait_name,
+                methods,
+            },
+            span: start.merge(body_span),
+        }))
     }
 
     fn try_convert_use_statement(&self, expr: &Expr) -> Result<Option<StmtKind>, ParseError> {
@@ -355,7 +541,7 @@ impl Parser {
                     return Err(ParseError {
                         message: "「使う」の引数は文字列リテラルで指定してください".into(),
                         span: arg.span,
-                    })
+                    });
                 }
             };
             match arg.particle {
@@ -365,7 +551,7 @@ impl Parser {
                     return Err(ParseError {
                         message: "「使う」で使える助詞は「を」「から」のみです".into(),
                         span: arg.span,
-                    })
+                    });
                 }
             }
         }
@@ -557,6 +743,35 @@ impl Parser {
             if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
                 break;
             }
+            if matches!(self.current_kind(), TokenKind::Identifier(_))
+                && matches!(self.peek_ahead(1), TokenKind::ToIu)
+                && matches!(self.peek_ahead(2), TokenKind::Tejun)
+            {
+                let method_start = self.current_span();
+                let (method_name, _) = self.eat_identifier()?;
+                self.eat(&TokenKind::ToIu)?;
+                self.eat(&TokenKind::Tejun)?;
+                let params = if matches!(self.current_kind(), TokenKind::LBracket) {
+                    self.parse_params()?
+                } else {
+                    Vec::new()
+                };
+                let method_end = self.tokens[self.pos.saturating_sub(1)].span;
+                methods.push(Stmt {
+                    kind: StmtKind::ProcDef {
+                        name: method_name,
+                        params,
+                        body: Block {
+                            statements: Vec::new(),
+                            span: method_end,
+                        },
+                        is_public: false,
+                    },
+                    span: method_start.merge(method_end),
+                });
+                self.skip_newlines();
+                continue;
+            }
             let stmt = self.parse_statement()?;
             methods.push(stmt);
             self.skip_newlines();
@@ -646,9 +861,17 @@ impl Parser {
                 self.advance();
                 let (param_name, _) = self.eat_identifier()?;
                 self.eat(&TokenKind::Colon)?;
-                // 助詞を読み飛ばす
-                if matches!(self.current_kind(), TokenKind::Particle(_)) {
-                    self.advance();
+                // catch 引数助詞は `で` 固定
+                match self.current_kind() {
+                    TokenKind::Particle(Particle::De) => {
+                        self.advance();
+                    }
+                    _ => {
+                        return Err(ParseError {
+                            message: "失敗した場合の引数助詞は `で` のみ使用できます".into(),
+                            span: self.current_span(),
+                        });
+                    }
                 }
                 self.eat(&TokenKind::RBracket)?;
                 catch_param = Some(param_name);
@@ -687,6 +910,11 @@ impl Parser {
         self.pos = checkpoint;
 
         if let Some(stmt) = self.try_parse_range_loop(start)? {
+            return Ok(Some(stmt));
+        }
+        self.pos = checkpoint;
+
+        if let Some(stmt) = self.try_parse_foreach_loop(start)? {
             return Ok(Some(stmt));
         }
         self.pos = checkpoint;
@@ -801,6 +1029,46 @@ impl Parser {
         }))
     }
 
+    fn try_parse_foreach_loop(&mut self, start: Span) -> Result<Option<Stmt>, ParseError> {
+        let checkpoint = self.pos;
+        let iterable = match self.current_kind() {
+            TokenKind::Identifier(_) | TokenKind::Kore | TokenKind::Sore | TokenKind::Are => {
+                self.parse_primary()?
+            }
+            _ => return Ok(None),
+        };
+
+        if !matches!(self.current_kind(), TokenKind::AccessParticle) {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+        self.advance();
+        if !matches!(self.current_kind(), TokenKind::SorezoreNiTsuite) {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+        self.advance();
+
+        let var = self.parse_loop_var()?.ok_or(ParseError {
+            message: "「それぞれについて」には繰り返し変数が必要です".into(),
+            span: self.current_span(),
+        })?;
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        let end = body.span;
+        Ok(Some(Stmt {
+            kind: StmtKind::ExprStmt(Expr {
+                kind: ExprKind::Loop(Box::new(LoopKind::ForEach {
+                    iterable,
+                    var,
+                    body,
+                })),
+                span: start.merge(end),
+            }),
+            span: start.merge(end),
+        }))
+    }
+
     fn parse_loop_var(&mut self) -> Result<Option<String>, ParseError> {
         if !matches!(self.current_kind(), TokenKind::LBracket) {
             return Ok(None);
@@ -818,11 +1086,25 @@ impl Parser {
         self.eat(&TokenKind::Indent)?;
 
         let mut statements = Vec::new();
+        let mut safety_steps = 0usize;
         while !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
+            safety_steps = safety_steps.saturating_add(1);
+            if safety_steps > self.step_limit {
+                self.errors.push(ParseError {
+                    message: format!(
+                        "構文解析回数が上限を超えたため停止しました（上限: {}）",
+                        self.step_limit
+                    ),
+                    span: self.current_span(),
+                });
+                break;
+            }
+
             self.skip_newlines();
             if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
                 break;
             }
+            let before_pos = self.pos;
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),
                 Err(e) => {
@@ -831,6 +1113,16 @@ impl Parser {
                 }
             }
             self.skip_newlines();
+
+            if self.pos == before_pos
+                && !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof)
+            {
+                self.errors.push(ParseError {
+                    message: "構文解析が進行しないため、この位置で解析を打ち切りました".into(),
+                    span: self.current_span(),
+                });
+                self.advance();
+            }
         }
 
         let end_span = self.current_span();
@@ -911,6 +1203,10 @@ impl Parser {
             };
         }
 
+        if let Some(chain_expr) = self.try_parse_te_chain_expr(expr.clone())? {
+            return Ok(chain_expr);
+        }
+
         // 助詞が続く場合 → 助詞式（呼び出し）構築
         if matches!(
             self.current_kind(),
@@ -923,6 +1219,11 @@ impl Parser {
         // 比較は専用パスで解釈する
         if matches!(self.current_kind(), TokenKind::Particle(Particle::Ga)) {
             expr = self.parse_comparison_tail(expr)?;
+        }
+
+        // match 式: `値は どれかを調べる ...`
+        if matches!(self.current_kind(), TokenKind::DorekaWoShiraberu) {
+            expr = self.parse_match_tail(expr)?;
         }
 
         // `でない` (NOT)
@@ -940,6 +1241,431 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn try_parse_te_chain_expr(&mut self, head_expr: Expr) -> Result<Option<Expr>, ParseError> {
+        let checkpoint = self.pos;
+        let chain_start = head_expr.span;
+
+        if !matches!(self.current_kind(), TokenKind::Particle(Particle::Wo)) {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+
+        let Some((head_call, head_is_te)) =
+            self.try_parse_chain_call_step(Some(head_expr), true)?
+        else {
+            self.pos = checkpoint;
+            return Ok(None);
+        };
+
+        if !head_is_te {
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+
+        if !matches!(self.current_kind(), TokenKind::Comma) {
+            if matches!(
+                self.current_kind(),
+                TokenKind::Identifier(_) | TokenKind::HyoujiSuru | TokenKind::BunkiShite
+            ) {
+                return Err(ParseError {
+                    message: "て形連鎖には「、」が必要です".into(),
+                    span: self.current_span(),
+                });
+            }
+            self.pos = checkpoint;
+            return Ok(None);
+        }
+
+        self.advance(); // first comma
+        let mut steps = vec![head_call];
+
+        loop {
+            self.skip_newlines();
+
+            if matches!(self.current_kind(), TokenKind::BunkiShite) {
+                let branch_step = self.parse_chain_branch_step()?;
+                steps.push(branch_step);
+
+                self.skip_newlines();
+                if matches!(self.current_kind(), TokenKind::Comma) {
+                    self.advance();
+                    continue;
+                }
+
+                let Some((call, is_te)) = self.try_parse_chain_call_step(None, false)? else {
+                    return Err(ParseError {
+                        message: "分岐して の後には終止形ステップが必要です".into(),
+                        span: self.current_span(),
+                    });
+                };
+                if is_te {
+                    return Err(ParseError {
+                        message: "て形連鎖の最後は終止形が必要です".into(),
+                        span: self.current_span(),
+                    });
+                }
+                steps.push(call);
+                break;
+            }
+
+            let Some((call, is_te)) = self.try_parse_chain_call_step(None, false)? else {
+                return Err(ParseError {
+                    message: "て形連鎖のステップが必要です".into(),
+                    span: self.current_span(),
+                });
+            };
+            steps.push(call);
+
+            if is_te {
+                if !matches!(self.current_kind(), TokenKind::Comma) {
+                    return Err(ParseError {
+                        message: "て形連鎖には「、」が必要です".into(),
+                        span: self.current_span(),
+                    });
+                }
+                self.advance();
+                continue;
+            }
+            break;
+        }
+
+        let end_span = self.tokens[self.pos.saturating_sub(1)].span;
+        Ok(Some(Expr {
+            kind: ExprKind::TeChain { steps },
+            span: chain_start.merge(end_span),
+        }))
+    }
+
+    fn try_parse_chain_call_step(
+        &mut self,
+        first_arg: Option<Expr>,
+        allow_first_wo: bool,
+    ) -> Result<Option<(ChainStep, bool)>, ParseError> {
+        let checkpoint = self.pos;
+        let mut args: Vec<ParticleArg> = Vec::new();
+        let has_first_arg = first_arg.is_some();
+
+        if let Some(expr) = first_arg {
+            match self.current_kind().clone() {
+                TokenKind::Particle(p) => {
+                    if !allow_first_wo && p == Particle::Wo {
+                        return Err(ParseError {
+                            message: "て形ステップでは明示「を」は使えません".into(),
+                            span: self.current_span(),
+                        });
+                    }
+                    let particle_span = self.current_span();
+                    self.advance();
+                    args.push(ParticleArg {
+                        value: expr.clone(),
+                        particle: p,
+                        span: expr.span.merge(particle_span),
+                    });
+                }
+                _ => {
+                    self.pos = checkpoint;
+                    return Ok(None);
+                }
+            }
+        }
+
+        let parse_additional_args = !has_first_arg || !allow_first_wo;
+        if parse_additional_args {
+            loop {
+                if !self.is_primary_start_for_chain() {
+                    break;
+                }
+                if matches!(self.current_kind(), TokenKind::Identifier(_))
+                    && matches!(self.peek_ahead(1), TokenKind::Particle(Particle::De))
+                    && matches!(
+                        self.peek_ahead(2),
+                        TokenKind::Comma | TokenKind::Newline | TokenKind::Dedent | TokenKind::Eof
+                    )
+                {
+                    break;
+                }
+
+                let arg_checkpoint = self.pos;
+                let arg_expr = self.parse_primary()?;
+                let TokenKind::Particle(particle) = self.current_kind().clone() else {
+                    self.pos = arg_checkpoint;
+                    break;
+                };
+                if particle == Particle::Wo {
+                    return Err(ParseError {
+                        message: "て形ステップでは明示「を」は使えません".into(),
+                        span: self.current_span(),
+                    });
+                }
+                let particle_span = self.current_span();
+                self.advance();
+                args.push(ParticleArg {
+                    value: arg_expr.clone(),
+                    particle,
+                    span: arg_expr.span.merge(particle_span),
+                });
+            }
+        }
+
+        let (callee, is_te, end_span) = match self.current_kind().clone() {
+            TokenKind::Identifier(name) => {
+                let start_span = self.current_span();
+                self.advance();
+                if matches!(self.current_kind(), TokenKind::Particle(Particle::De))
+                    && matches!(
+                        self.peek_ahead(1),
+                        TokenKind::Comma
+                            | TokenKind::Newline
+                            | TokenKind::Dedent
+                            | TokenKind::Eof
+                            | TokenKind::BunkiShite
+                    )
+                {
+                    let end = self.current_span();
+                    self.advance();
+                    (format!("{name}で"), true, start_span.merge(end))
+                } else if name.ends_with('て') {
+                    (name, true, start_span)
+                } else {
+                    (name, false, start_span)
+                }
+            }
+            TokenKind::HyoujiSuru => {
+                let s = self.current_span();
+                self.advance();
+                ("表示する".to_string(), false, s)
+            }
+            TokenKind::Kaeru => {
+                let s = self.current_span();
+                self.advance();
+                ("変える".to_string(), false, s)
+            }
+            TokenKind::Tsukau => {
+                let s = self.current_span();
+                self.advance();
+                ("使う".to_string(), false, s)
+            }
+            TokenKind::Tsukuru => {
+                let s = self.current_span();
+                self.advance();
+                ("作る".to_string(), false, s)
+            }
+            _ => {
+                self.pos = checkpoint;
+                return Ok(None);
+            }
+        };
+
+        let _ = end_span;
+        Ok(Some((ChainStep::Call { callee, args }, is_te)))
+    }
+
+    fn parse_chain_branch_step(&mut self) -> Result<ChainStep, ParseError> {
+        self.eat(&TokenKind::BunkiShite)?;
+        self.skip_newlines();
+        let branch_block = self.parse_block()?;
+        if branch_block.statements.len() != 1 {
+            return Err(ParseError {
+                message: "分岐して ブロックには分岐式を1つだけ書いてください".into(),
+                span: branch_block.span,
+            });
+        }
+
+        let StmtKind::ExprStmt(if_expr) = &branch_block.statements[0].kind else {
+            return Err(ParseError {
+                message: "分岐して ブロックには「もし ...」式が必要です".into(),
+                span: branch_block.span,
+            });
+        };
+        if !matches!(if_expr.kind, ExprKind::If { .. }) {
+            return Err(ParseError {
+                message: "分岐して ブロックには「もし ...」式が必要です".into(),
+                span: if_expr.span,
+            });
+        }
+        if !self.if_expr_returns_value(if_expr) {
+            return Err(ParseError {
+                message: "分岐して の各分岐は値を返す必要があります".into(),
+                span: if_expr.span,
+            });
+        }
+
+        Ok(ChainStep::Branch {
+            if_expr: if_expr.clone(),
+        })
+    }
+
+    fn if_expr_returns_value(&self, if_expr: &Expr) -> bool {
+        let ExprKind::If {
+            then_block,
+            elif_clauses,
+            else_block,
+            ..
+        } = &if_expr.kind
+        else {
+            return false;
+        };
+
+        if !self.block_ends_with_return(then_block) {
+            return false;
+        }
+        if elif_clauses
+            .iter()
+            .any(|(_, block)| !self.block_ends_with_return(block))
+        {
+            return false;
+        }
+        match else_block {
+            Some(block) => self.block_ends_with_return(block),
+            None => false,
+        }
+    }
+
+    fn block_ends_with_return(&self, block: &Block) -> bool {
+        matches!(
+            block.statements.last().map(|s| &s.kind),
+            Some(StmtKind::Return(_))
+        )
+    }
+
+    fn is_primary_start_for_chain(&self) -> bool {
+        matches!(
+            self.current_kind(),
+            TokenKind::Integer(_)
+                | TokenKind::Float(_)
+                | TokenKind::String(_)
+                | TokenKind::StringInterpStart
+                | TokenKind::Bool(_)
+                | TokenKind::Kore
+                | TokenKind::Sore
+                | TokenKind::Are
+                | TokenKind::Kou
+                | TokenKind::Koko
+                | TokenKind::Soko
+                | TokenKind::DoreDemoNai
+                | TokenKind::LBracket
+                | TokenKind::LBrace
+                | TokenKind::LParen
+                | TokenKind::Moshi
+                | TokenKind::Tamesu
+                | TokenKind::Identifier(_)
+        )
+    }
+
+    fn parse_match_tail(&mut self, target: Expr) -> Result<Expr, ParseError> {
+        let start = target.span;
+        self.eat(&TokenKind::DorekaWoShiraberu)?;
+        self.skip_newlines();
+        self.eat(&TokenKind::Indent)?;
+
+        let mut arms = Vec::new();
+        while !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
+            self.skip_newlines();
+            if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
+                break;
+            }
+
+            let arm_start = self.current_span();
+            let pattern = if matches!(self.current_kind(), TokenKind::DoreDemoNaiBaai) {
+                self.advance();
+                Pattern::Default
+            } else {
+                let p = self.parse_match_pattern()?;
+                self.eat(&TokenKind::AccessParticle)?;
+                self.eat(&TokenKind::NoBaai)?;
+                p
+            };
+
+            self.skip_newlines();
+            let body = self.parse_block()?;
+            let arm_span = arm_start.merge(body.span);
+            arms.push(MatchArm {
+                pattern,
+                body,
+                span: arm_span,
+            });
+            self.skip_newlines();
+        }
+
+        let end_span = self.current_span();
+        if matches!(self.current_kind(), TokenKind::Dedent) {
+            self.advance();
+        }
+
+        Ok(Expr {
+            kind: ExprKind::Match {
+                target: Box::new(target),
+                arms,
+            },
+            span: start.merge(end_span),
+        })
+    }
+
+    fn parse_match_pattern(&mut self) -> Result<Pattern, ParseError> {
+        match self.current_kind().clone() {
+            TokenKind::Doreka => {
+                self.advance();
+                Ok(Pattern::Wildcard)
+            }
+            TokenKind::Identifier(name) => {
+                self.advance();
+                Ok(Pattern::Binding(name))
+            }
+            TokenKind::LBracket => self.parse_match_list_pattern(),
+            TokenKind::Integer(_)
+            | TokenKind::Float(_)
+            | TokenKind::String(_)
+            | TokenKind::Bool(_) => {
+                let lit = self.parse_primary()?;
+                Ok(Pattern::Literal(lit))
+            }
+            _ => Err(ParseError {
+                message: "match の場合パターンが必要です".into(),
+                span: self.current_span(),
+            }),
+        }
+    }
+
+    fn parse_match_list_pattern(&mut self) -> Result<Pattern, ParseError> {
+        self.eat(&TokenKind::LBracket)?;
+        let mut items = Vec::new();
+
+        while !matches!(self.current_kind(), TokenKind::RBracket | TokenKind::Eof) {
+            let item = match self.current_kind().clone() {
+                TokenKind::Doreka => {
+                    self.advance();
+                    Pattern::Wildcard
+                }
+                TokenKind::Identifier(name) => {
+                    self.advance();
+                    Pattern::Binding(name)
+                }
+                TokenKind::Integer(_)
+                | TokenKind::Float(_)
+                | TokenKind::String(_)
+                | TokenKind::Bool(_) => {
+                    let lit = self.parse_primary()?;
+                    Pattern::Literal(lit)
+                }
+                _ => {
+                    return Err(ParseError {
+                        message: "分解パターン要素が必要です".into(),
+                        span: self.current_span(),
+                    });
+                }
+            };
+            items.push(item);
+            if matches!(self.current_kind(), TokenKind::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        self.eat(&TokenKind::RBracket)?;
+        Ok(Pattern::List(items))
     }
 
     fn parse_comparison_tail(&mut self, left: Expr) -> Result<Expr, ParseError> {
@@ -1116,6 +1842,16 @@ impl Parser {
                         let prop_span = self.current_span();
                         self.advance();
 
+                        if matches!(current_expr.kind, ExprKind::StringLiteral(_))
+                            && prop.ends_with("する")
+                        {
+                            return Err(ParseError {
+                                message: "「の」はアクセス助詞です。役割助詞としては使えません"
+                                    .into(),
+                                span: prop_span,
+                            });
+                        }
+
                         // 算術チェック: `aとbの和/差/積` パターン（固定糖衣構文）
                         if is_arithmetic_word(&prop) && !args.is_empty() {
                             let op = arithmetic_op(&prop).unwrap();
@@ -1200,6 +1936,16 @@ impl Parser {
         let callee = self.parse_verb()?;
         let end_span = self.tokens[self.pos - 1].span;
         let start_span = args.first().map(|a| a.span).unwrap_or(end_span);
+
+        if args.iter().any(|a| {
+            a.particle == Particle::De
+                && matches!(&a.value.kind, ExprKind::Identifier(s) if s.ends_with('ん'))
+        }) {
+            return Err(ParseError {
+                message: "て形連鎖には「、」が必要です".into(),
+                span: start_span.merge(end_span),
+            });
+        }
 
         if callee == "訴える" {
             if args.len() != 1 || args[0].particle != Particle::To {
@@ -1390,6 +2136,46 @@ impl Parser {
                     span: start,
                 })
             }
+            TokenKind::HyoujiSuru => {
+                self.advance();
+                Ok(Expr {
+                    kind: ExprKind::Call {
+                        callee: "表示する".into(),
+                        args: Vec::new(),
+                    },
+                    span: start,
+                })
+            }
+            TokenKind::Kaeru => {
+                self.advance();
+                Ok(Expr {
+                    kind: ExprKind::Call {
+                        callee: "変える".into(),
+                        args: Vec::new(),
+                    },
+                    span: start,
+                })
+            }
+            TokenKind::Tsukau => {
+                self.advance();
+                Ok(Expr {
+                    kind: ExprKind::Call {
+                        callee: "使う".into(),
+                        args: Vec::new(),
+                    },
+                    span: start,
+                })
+            }
+            TokenKind::Tsukuru => {
+                self.advance();
+                Ok(Expr {
+                    kind: ExprKind::Call {
+                        callee: "作る".into(),
+                        args: Vec::new(),
+                    },
+                    span: start,
+                })
+            }
             _ => Err(ParseError {
                 message: format!("式が必要ですが、「{}」がありました", self.current_kind()),
                 span: start,
@@ -1538,6 +2324,14 @@ impl Parser {
 }
 
 // === ヘルパー関数 ===
+
+fn resolve_parse_step_limit() -> usize {
+    std::env::var("KOTOBA_PARSE_STEP_LIMIT")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_PARSE_STEP_LIMIT)
+}
 
 fn is_arithmetic_word(word: &str) -> bool {
     matches!(word, "和" | "差" | "積")

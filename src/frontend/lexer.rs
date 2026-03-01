@@ -1,5 +1,62 @@
+use logos::Logos;
+use tracing::instrument;
+use unicode_normalization::UnicodeNormalization;
+
 use crate::source::Span;
 use crate::token::{Particle, Token, TokenKind};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NumberLexeme {
+    normalized: String,
+    is_float: bool,
+}
+
+#[derive(Logos, Debug, Clone, PartialEq, Eq)]
+#[logos(error = ())]
+enum RawLex {
+    #[token("\n")]
+    Newline,
+    #[regex(r"[ \t\r\u{3000}]+")]
+    Space,
+    #[token("※")]
+    CommentStart,
+    #[token("「")]
+    StringStart,
+    #[token("（")]
+    #[token("(")]
+    LParen,
+    #[token("）")]
+    #[token(")")]
+    RParen,
+    #[token("【")]
+    #[token("[")]
+    LBracket,
+    #[token("】")]
+    #[token("]")]
+    RBracket,
+    #[token("｛")]
+    #[token("{")]
+    LBrace,
+    #[token("｝")]
+    #[token("}")]
+    RBrace,
+    #[token("、")]
+    #[token(",")]
+    Comma,
+    #[token("。")]
+    #[token(".")]
+    Period,
+    #[token("：")]
+    #[token(":")]
+    Colon,
+    #[token("…")]
+    Ellipsis,
+    #[regex(r"[0-9０-９]+([\.．][0-9０-９]+)?", lex_number_lexeme)]
+    Number(NumberLexeme),
+    #[regex(r"[A-Za-z_][A-Za-z0-9_]*", lex_word_lexeme)]
+    #[regex(r"[ぁ-ゟ゠-ヿ一-龯㐀-䶿豈-﫿ー]+", lex_word_lexeme)]
+    Word(String),
+}
 
 /// 字句解析エラー
 #[derive(Debug, Clone)]
@@ -36,6 +93,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// ソースコード全体をトークン化する
+    #[instrument(skip(self))]
     pub fn tokenize(mut self) -> (Vec<Token>, Vec<LexError>) {
         while !self.is_eof() {
             if self.at_line_start {
@@ -47,12 +105,12 @@ impl<'src> Lexer<'src> {
                 break;
             }
 
-            let ch = self.peek_char().unwrap();
+            let (next, span_end) = self.next_raw();
 
-            match ch {
-                '\n' => {
+            match next {
+                Some(Ok(RawLex::Newline)) => {
                     let start = self.pos;
-                    self.advance_char();
+                    self.pos += span_end;
                     // 連続する空行はスキップ
                     if !self.tokens.is_empty() {
                         let last = self.tokens.last().map(|t| &t.kind);
@@ -63,78 +121,27 @@ impl<'src> Lexer<'src> {
                     }
                     self.at_line_start = true;
                 }
-                ' ' | '\t' | '\r' | '\u{3000}' => {
+                Some(Ok(RawLex::Space)) => {
                     // 空白スキップ（全角スペースも対応）
-                    self.advance_char();
+                    self.pos += span_end;
                 }
-                '※' => self.lex_comment(),
-                '（' => {
+                Some(Ok(RawLex::CommentStart)) => self.lex_comment(),
+                Some(Ok(RawLex::StringStart)) => self.lex_string(),
+                Some(Ok(RawLex::Number(number))) => self.lex_number(number, span_end),
+                Some(Ok(RawLex::Word(word))) => self.lex_identifier_or_keyword(word, span_end),
+                Some(Ok(RawLex::LParen)) => self.push_single(TokenKind::LParen, span_end),
+                Some(Ok(RawLex::RParen)) => self.push_single(TokenKind::RParen, span_end),
+                Some(Ok(RawLex::LBracket)) => self.push_single(TokenKind::LBracket, span_end),
+                Some(Ok(RawLex::RBracket)) => self.push_single(TokenKind::RBracket, span_end),
+                Some(Ok(RawLex::LBrace)) => self.push_single(TokenKind::LBrace, span_end),
+                Some(Ok(RawLex::RBrace)) => self.push_single(TokenKind::RBrace, span_end),
+                Some(Ok(RawLex::Comma)) => self.push_single(TokenKind::Comma, span_end),
+                Some(Ok(RawLex::Period)) => self.push_single(TokenKind::Period, span_end),
+                Some(Ok(RawLex::Colon)) => self.push_single(TokenKind::Colon, span_end),
+                Some(Ok(RawLex::Ellipsis)) => self.push_single(TokenKind::Ellipsis, span_end),
+                Some(Err(_)) => {
                     let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::LParen, Span::new(start, self.pos)));
-                }
-                '「' => self.lex_string(),
-                '【' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::LBracket, Span::new(start, self.pos)));
-                }
-                '】' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::RBracket, Span::new(start, self.pos)));
-                }
-                '｛' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::LBrace, Span::new(start, self.pos)));
-                }
-                '｝' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::RBrace, Span::new(start, self.pos)));
-                }
-                '）' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::RParen, Span::new(start, self.pos)));
-                }
-                '、' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::Comma, Span::new(start, self.pos)));
-                }
-                '。' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::Period, Span::new(start, self.pos)));
-                }
-                ':' | '：' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    self.tokens
-                        .push(Token::new(TokenKind::Colon, Span::new(start, self.pos)));
-                }
-                '…' => {
-                    let start = self.pos;
-                    self.advance_char();
-                    // 継続行: 次の改行まで無視して続行
-                    self.tokens
-                        .push(Token::new(TokenKind::Ellipsis, Span::new(start, self.pos)));
-                }
-                _ if is_digit_start(ch) => self.lex_number(),
-                _ if is_ident_start(ch) => self.lex_identifier_or_keyword(),
-                _ => {
-                    let start = self.pos;
-                    self.advance_char();
+                    let ch = self.advance_char().unwrap_or('\0');
                     let msg = format!("予期しない文字: '{ch}'");
                     self.errors.push(LexError {
                         message: msg.clone(),
@@ -145,6 +152,7 @@ impl<'src> Lexer<'src> {
                         Span::new(start, self.pos),
                     ));
                 }
+                None => break,
             }
         }
 
@@ -176,6 +184,20 @@ impl<'src> Lexer<'src> {
         let ch = self.source[self.pos..].chars().next()?;
         self.pos += ch.len_utf8();
         Some(ch)
+    }
+
+    fn push_single(&mut self, kind: TokenKind, span_end: usize) {
+        let start = self.pos;
+        self.pos += span_end;
+        self.tokens
+            .push(Token::new(kind, Span::new(start, self.pos)));
+    }
+
+    fn next_raw(&self) -> (Option<Result<RawLex, ()>>, usize) {
+        let mut raw = RawLex::lexer(self.remaining());
+        let next = raw.next();
+        let span_end = raw.span().end;
+        (next, span_end)
     }
 
     #[allow(dead_code)]
@@ -235,27 +257,13 @@ impl<'src> Lexer<'src> {
 
     // === 数値 ===
 
-    fn lex_number(&mut self) {
+    fn lex_number(&mut self, number: NumberLexeme, span_end: usize) {
         let start = self.pos;
-        let mut s = String::new();
-        let mut is_float = false;
-
-        // 全角数字を半角に変換しながら読み取る
-        while let Some(ch) = self.peek_char() {
-            if let Some(d) = to_halfwidth_digit(ch) {
-                s.push(d);
-                self.advance_char();
-            } else if ch == '.' || ch == '．' {
-                if is_float {
-                    break;
-                }
-                is_float = true;
-                s.push('.');
-                self.advance_char();
-            } else {
-                break;
-            }
-        }
+        let NumberLexeme {
+            normalized: s,
+            is_float,
+        } = number;
+        self.pos += span_end;
 
         let num_end = self.pos;
 
@@ -358,29 +366,28 @@ impl<'src> Lexer<'src> {
         // 【 の後、】が見つかるまでトークン化
         // 簡易実装: 識別子のみ対応（将来的には完全な式を対応する）
         while !self.is_eof() {
-            if let Some(ch) = self.peek_char() {
-                match ch {
-                    '】' => {
-                        let end_start = self.pos;
-                        self.advance_char();
-                        self.tokens.push(Token::new(
-                            TokenKind::StringInterpEnd,
-                            Span::new(end_start, self.pos),
-                        ));
-                        return;
-                    }
-                    ' ' | '\t' | '\r' | '\u{3000}' => {
-                        self.advance_char();
-                    }
-                    _ if is_ident_start(ch) => {
-                        self.lex_identifier_or_keyword();
-                    }
-                    _ if is_digit_start(ch) => {
-                        self.lex_number();
-                    }
-                    _ => {
-                        self.advance_char();
-                    }
+            if self.starts_with("】") {
+                let end_start = self.pos;
+                self.advance_char();
+                self.tokens.push(Token::new(
+                    TokenKind::StringInterpEnd,
+                    Span::new(end_start, self.pos),
+                ));
+                return;
+            }
+
+            let (next, span_end) = self.next_raw();
+            match next {
+                Some(Ok(RawLex::Number(number))) => self.lex_number(number, span_end),
+                Some(Ok(RawLex::Word(word))) => self.lex_identifier_or_keyword(word, span_end),
+                Some(Ok(_)) => {
+                    self.pos += span_end;
+                }
+                Some(Err(_)) => {
+                    self.advance_char();
+                }
+                None => {
+                    return;
                 }
             }
         }
@@ -452,51 +459,28 @@ impl<'src> Lexer<'src> {
 
     // === 識別子・キーワード ===
 
-    fn lex_identifier_or_keyword(&mut self) {
+    fn lex_identifier_or_keyword(&mut self, word: String, span_end: usize) {
         let start = self.pos;
-        let mut word = String::new();
-
-        // 最初の文字でASCIモード/日本語モードを判定
-        let first_ch = self.peek_char().unwrap();
-        let ascii_mode = first_ch.is_ascii_alphabetic() || first_ch == '_';
-
-        while let Some(ch) = self.peek_char() {
-            if ascii_mode {
-                // ASCIIモード: ASCII英数字とアンダースコアのみ収集
-                if ch.is_ascii_alphanumeric() || ch == '_' {
-                    word.push(ch);
-                    self.advance_char();
-                } else {
-                    break;
-                }
-            } else {
-                // 日本語モード: 日本語文字のみ収集（ASCII文字で停止）
-                if is_japanese_char(ch) {
-                    word.push(ch);
-                    self.advance_char();
-                } else {
-                    break;
-                }
-            }
-        }
+        self.pos += span_end;
 
         let span = Span::new(start, self.pos);
+        let normalized_word = normalize_nfc(&word);
 
         // キーワード判定（完全一致が最優先）
-        if let Some(kind) = keyword_from_str(&word) {
+        if let Some(kind) = keyword_from_str(&normalized_word) {
             self.tokens.push(Token::new(kind, span));
             return;
         }
 
         // アクセス助詞「の」の単体判定
-        if word == "の" {
+        if normalized_word == "の" {
             self.tokens
                 .push(Token::new(TokenKind::AccessParticle, span));
             return;
         }
 
         // 助詞単体の判定（助詞だけを書いた場合）
-        if let Some(p) = standalone_particle(&word) {
+        if let Some(p) = standalone_particle(&normalized_word) {
             self.tokens.push(Token::new(TokenKind::Particle(p), span));
             return;
         }
@@ -508,14 +492,13 @@ impl<'src> Lexer<'src> {
             // 「の」の前の部分
             if no_byte_pos > 0 {
                 let before = &word[..no_byte_pos];
+                let before_norm = normalize_nfc(before);
                 let before_span = Span::new(start, start + no_byte_pos);
-                if let Some(kind) = keyword_from_str(before) {
+                if let Some(kind) = keyword_from_str(&before_norm) {
                     self.tokens.push(Token::new(kind, before_span));
                 } else {
-                    self.tokens.push(Token::new(
-                        TokenKind::Identifier(before.to_string()),
-                        before_span,
-                    ));
+                    self.tokens
+                        .push(Token::new(TokenKind::Identifier(before_norm), before_span));
                 }
             }
 
@@ -542,16 +525,17 @@ impl<'src> Lexer<'src> {
     /// ワードから末尾の助詞を分離してトークンを出力する
     fn emit_word_with_particles(&mut self, word: &str, byte_offset: usize) {
         let word_end = byte_offset + word.len();
+        let normalized_word = normalize_nfc(word);
 
         // キーワード判定
-        if let Some(kind) = keyword_from_str(word) {
+        if let Some(kind) = keyword_from_str(&normalized_word) {
             self.tokens
                 .push(Token::new(kind, Span::new(byte_offset, word_end)));
             return;
         }
 
         // 助詞単体判定
-        if let Some(p) = standalone_particle(word) {
+        if let Some(p) = standalone_particle(&normalized_word) {
             self.tokens.push(Token::new(
                 TokenKind::Particle(p),
                 Span::new(byte_offset, word_end),
@@ -560,7 +544,7 @@ impl<'src> Lexer<'src> {
         }
 
         // 「の」単体
-        if word == "の" {
+        if normalized_word == "の" {
             self.tokens.push(Token::new(
                 TokenKind::AccessParticle,
                 Span::new(byte_offset, word_end),
@@ -571,14 +555,15 @@ impl<'src> Lexer<'src> {
         // 末尾助詞の分離
         if let Some((particle, ident_byte_len)) = Particle::from_suffix(word) {
             let ident_part = &word[..ident_byte_len];
+            let ident_normalized = normalize_nfc(ident_part);
             let ident_span = Span::new(byte_offset, byte_offset + ident_byte_len);
             let particle_span = Span::new(byte_offset + ident_byte_len, word_end);
 
-            if let Some(kind) = keyword_from_str(ident_part) {
+            if let Some(kind) = keyword_from_str(&ident_normalized) {
                 self.tokens.push(Token::new(kind, ident_span));
             } else {
                 self.tokens.push(Token::new(
-                    TokenKind::Identifier(ident_part.to_string()),
+                    TokenKind::Identifier(ident_normalized),
                     ident_span,
                 ));
             }
@@ -592,14 +577,15 @@ impl<'src> Lexer<'src> {
             let ident_byte_len = word.len() - "の".len();
             if ident_byte_len > 0 {
                 let ident_part = &word[..ident_byte_len];
+                let ident_normalized = normalize_nfc(ident_part);
                 let ident_span = Span::new(byte_offset, byte_offset + ident_byte_len);
                 let access_span = Span::new(byte_offset + ident_byte_len, word_end);
 
-                if let Some(kind) = keyword_from_str(ident_part) {
+                if let Some(kind) = keyword_from_str(&ident_normalized) {
                     self.tokens.push(Token::new(kind, ident_span));
                 } else {
                     self.tokens.push(Token::new(
-                        TokenKind::Identifier(ident_part.to_string()),
+                        TokenKind::Identifier(ident_normalized),
                         ident_span,
                     ));
                 }
@@ -611,7 +597,7 @@ impl<'src> Lexer<'src> {
 
         // 通常の識別子
         self.tokens.push(Token::new(
-            TokenKind::Identifier(word.to_string()),
+            TokenKind::Identifier(normalized_word),
             Span::new(byte_offset, word_end),
         ));
     }
@@ -632,33 +618,29 @@ fn to_halfwidth_digit(ch: char) -> Option<char> {
     }
 }
 
-/// 数値の先頭になり得る文字か
-fn is_digit_start(ch: char) -> bool {
-    ch.is_ascii_digit() || ('０'..='９').contains(&ch)
+fn lex_number_lexeme(lex: &mut logos::Lexer<'_, RawLex>) -> NumberLexeme {
+    let mut normalized = String::with_capacity(lex.slice().len());
+    let mut is_float = false;
+    for ch in lex.slice().chars() {
+        if let Some(d) = to_halfwidth_digit(ch) {
+            normalized.push(d);
+        } else {
+            normalized.push('.');
+            is_float = true;
+        }
+    }
+    NumberLexeme {
+        normalized,
+        is_float,
+    }
 }
 
-/// 識別子の先頭になり得る文字か
-fn is_ident_start(ch: char) -> bool {
-    matches!(ch,
-        'a'..='z' | 'A'..='Z' | '_'
-    ) || is_japanese_char(ch)
+fn lex_word_lexeme(lex: &mut logos::Lexer<'_, RawLex>) -> String {
+    lex.slice().to_string()
 }
 
-/// 識別子の継続文字か
-#[allow(dead_code)]
-fn is_ident_continue(ch: char) -> bool {
-    is_ident_start(ch) || ch.is_ascii_digit() || ('０'..='９').contains(&ch)
-}
-
-/// 日本語文字か（ひらがな・カタカナ・漢字・長音）
-fn is_japanese_char(ch: char) -> bool {
-    matches!(ch,
-        '\u{3040}'..='\u{309F}' |  // ひらがな
-        '\u{30A0}'..='\u{30FF}' |  // カタカナ（長音符ーを含む）
-        '\u{4E00}'..='\u{9FFF}' |  // CJK統合漢字
-        '\u{3400}'..='\u{4DBF}' |  // CJK統合漢字拡張A
-        '\u{F900}'..='\u{FAFF}'    // CJK互換漢字
-    )
+fn normalize_nfc(s: &str) -> String {
+    s.nfc().collect()
 }
 
 /// 助数詞に使える文字か（漢字・カタカナのみ、ひらがなは除外）

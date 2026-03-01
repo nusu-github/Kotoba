@@ -1,6 +1,8 @@
 use kotoba::frontend::ast::StmtKind;
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
+use kotoba::frontend::token::{Token, TokenKind};
+use kotoba::source::Span;
 
 #[test]
 fn parser_accepts_proc_def() {
@@ -86,6 +88,24 @@ fn parser_reports_dgn_006_for_reserved_future_keyword() {
 }
 
 #[test]
+fn parser_reports_invalid_declaration_target_after_toiu() {
+    let src = "足す という 変数";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+    let joined = parse_errs
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        joined.contains("「という」の後には「手順」「組」「特性」が必要です"),
+        "parse_errs={joined}"
+    );
+}
+
+#[test]
 fn parser_accepts_proc_with_if_body() {
     let src = r#"
 減らす という 手順【n:を】
@@ -96,6 +116,209 @@ fn parser_accepts_proc_with_if_body() {
 "#;
     let (tokens, lex_errs) = Lexer::new(src).tokenize();
     assert!(lex_errs.is_empty());
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_does_not_hang_on_invalid_proc_param_syntax() {
+    let src = "表示する という 手順【:を】\n  返す";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_rejects_try_catch_param_particle_not_de() {
+    let src = "試す\n  1\n失敗した場合【問題:を】\n  0";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_rejects_duplicate_public_modifier() {
+    let src = "公開 公開 足す という 手順【a:を】\n  aを返す";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_rejects_missing_statement_separator() {
+    let src = "名前 「太郎」";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_reports_unmatched_closing_delimiter_and_recovers() {
+    let src = "）\n表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+    let joined = parse_errs
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        joined.contains("対応する開始記号がない閉じ記号「）」"),
+        "parse_errs={joined}"
+    );
+    assert_eq!(program.statements.len(), 1);
+}
+
+#[test]
+fn parser_reports_missing_closing_delimiter_and_recovers() {
+    let src = "値は（1\n表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+    let joined = parse_errs
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        joined.contains("閉じ記号「）」が不足しています"),
+        "parse_errs={joined}"
+    );
+    assert!(
+        !program.statements.is_empty(),
+        "program.statements={:?}",
+        program.statements
+    );
+}
+
+#[test]
+fn parser_recovers_and_keeps_following_valid_statement() {
+    let src = "名前 「太郎」\n表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+    assert_eq!(program.statements.len(), 1);
+}
+
+#[test]
+fn parser_accepts_tokens_without_explicit_eof() {
+    let tokens = vec![Token::new(TokenKind::HyoujiSuru, Span::new(0, 0))];
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    assert_eq!(program.statements.len(), 1);
+}
+
+#[test]
+fn parser_rejects_access_particle_as_role_on_string() {
+    let src = "「x」の 複製する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_rejects_trait_impl_without_body() {
+    let src = "人 は 表示できる を持つ";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_accepts_mutable_bind_without_space_before_value() {
+    let src = "変わる 数は0";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    assert_eq!(program.statements.len(), 1);
+    match &program.statements[0].kind {
+        StmtKind::Bind { name, mutable, .. } => {
+            assert_eq!(name, "数");
+            assert!(*mutable);
+        }
+        other => panic!("可変束縛が期待されました: {:?}", other),
+    }
+}
+
+#[test]
+fn parser_accepts_trait_method_signature_without_body() {
+    let src = "表示できる という 特性\n  文字列にする という 手順";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_trait_impl_with_body() {
+    let src = "人は 表示できる を持つ\n  文字列にする という 手順\n    返す";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_foreach_loop() {
+    let src = "一覧の それぞれについて【e】\n  eを 表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_bare_display_call_statement() {
+    let src = "表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_match_expression_with_literal_and_default_arm() {
+    let src = "値は どれかを調べる\n  1の場合\n    10\n  どれでもない場合\n    0";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_match_expression_with_list_pattern_arm() {
+    let src = "値は どれかを調べる\n  【どれか、x】の場合\n    x\n  どれでもない場合\n    0";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_te_chain() {
+    let src = "「a.csv」を 読んで、行に分けて、表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_accepts_te_chain_with_branch() {
+    let src = "「a.csv」を 読んで、分岐して\n  もし 真 ならば\n    「成功」を 返す\n  そうでなければ\n    「失敗」を 返す\n表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
     let (_program, parse_errs) = Parser::new(tokens).parse();
     assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
 }

@@ -1,4 +1,4 @@
-use ariadne::{Color, Label, Report, ReportKind, Source};
+use miette::{LabeledSpan, MietteDiagnostic, NamedSource, Report, Severity};
 
 use crate::common::source::{SourceFile, Span};
 
@@ -9,6 +9,18 @@ pub enum DiagnosticKind {
     Sema,
     Compile,
     Runtime,
+}
+
+impl DiagnosticKind {
+    fn code(self) -> &'static str {
+        match self {
+            DiagnosticKind::Lex => "kotoba::lex",
+            DiagnosticKind::Parse => "kotoba::parse",
+            DiagnosticKind::Sema => "kotoba::sema",
+            DiagnosticKind::Compile => "kotoba::compile",
+            DiagnosticKind::Runtime => "kotoba::runtime",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,28 +53,36 @@ impl Diagnostic {
 }
 
 pub fn render(diag: &Diagnostic, source: Option<&SourceFile>) {
-    match (diag.span, source) {
-        (Some(span), Some(src)) => {
-            let mut report =
-                Report::build(ReportKind::Error, (src.name.clone(), span.start..span.end))
-                    .with_message(format!("{:?}: {}", diag.kind, diag.message))
-                    .with_label(
-                        Label::new((src.name.clone(), span.start..span.end))
-                            .with_color(Color::Red)
-                            .with_message(diag.message.clone()),
-                    );
-            if let Some(hint) = &diag.hint {
-                report = report.with_note(hint.clone());
-            }
-            let _ = report
-                .finish()
-                .print((src.name.clone(), Source::from(src.content.clone())));
+    let mut base = MietteDiagnostic::new(format!("{:?}: {}", diag.kind, diag.message))
+        .with_code(diag.kind.code())
+        .with_severity(Severity::Error);
+
+    if let Some(hint) = &diag.hint {
+        base = base.with_help(hint.clone());
+    }
+
+    if let Some(span) = diag.span {
+        let len = span.end.saturating_sub(span.start).max(1);
+        base = base.with_label(LabeledSpan::new(
+            Some(diag.message.clone()),
+            span.start,
+            len,
+        ));
+    }
+
+    match source {
+        Some(src) => {
+            let named = NamedSource::new(src.name.clone(), src.content.clone());
+            let report = Report::new(base).with_source_code(named);
+            print_report(report);
         }
-        _ => {
-            eprintln!("{:?}: {}", diag.kind, diag.message);
-            if let Some(hint) = &diag.hint {
-                eprintln!("  ヒント: {}", hint);
-            }
+        None => {
+            let report = Report::new(base);
+            print_report(report);
         }
     }
+}
+
+fn print_report(report: Report) {
+    eprintln!("{report:?}");
 }

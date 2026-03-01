@@ -1,3 +1,5 @@
+use unicode_normalization::UnicodeNormalization;
+
 /// ソース位置情報
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -39,7 +41,7 @@ pub struct SourceFile {
 
 impl SourceFile {
     pub fn new(name: impl Into<String>, content: impl Into<String>) -> Self {
-        let content = content.into();
+        let content = normalize_for_lexing(content.into().as_str());
         let mut line_starts = vec![0];
         for (i, ch) in content.char_indices() {
             if ch == '\n' {
@@ -70,4 +72,114 @@ impl SourceFile {
     pub fn slice(&self, span: Span) -> &str {
         &self.content[span.start..span.end]
     }
+}
+
+fn normalize_for_lexing(input: &str) -> String {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Mode {
+        Normal,
+        StringLiteral,
+        LineComment,
+        BlockComment { depth: usize },
+    }
+
+    let mut mode = Mode::Normal;
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0usize;
+    let mut normal_start = 0usize;
+
+    while i < input.len() {
+        match mode {
+            Mode::Normal => {
+                if input[i..].starts_with("※（") {
+                    if normal_start < i {
+                        out.push_str(&input[normal_start..i].nfkc().collect::<String>());
+                    }
+                    out.push_str("※（");
+                    i += "※（".len();
+                    mode = Mode::BlockComment { depth: 1 };
+                    continue;
+                }
+
+                let ch = input[i..]
+                    .chars()
+                    .next()
+                    .expect("valid UTF-8 boundary while normalizing");
+                if ch == '※' {
+                    if normal_start < i {
+                        out.push_str(&input[normal_start..i].nfkc().collect::<String>());
+                    }
+                    out.push(ch);
+                    i += ch.len_utf8();
+                    mode = Mode::LineComment;
+                    continue;
+                }
+                if ch == '「' {
+                    if normal_start < i {
+                        out.push_str(&input[normal_start..i].nfkc().collect::<String>());
+                    }
+                    out.push(ch);
+                    i += ch.len_utf8();
+                    mode = Mode::StringLiteral;
+                    continue;
+                }
+                i += ch.len_utf8();
+            }
+            Mode::StringLiteral => {
+                let ch = input[i..]
+                    .chars()
+                    .next()
+                    .expect("valid UTF-8 boundary while normalizing");
+                out.push(ch);
+                i += ch.len_utf8();
+                if ch == '」' {
+                    mode = Mode::Normal;
+                    normal_start = i;
+                }
+            }
+            Mode::LineComment => {
+                let ch = input[i..]
+                    .chars()
+                    .next()
+                    .expect("valid UTF-8 boundary while normalizing");
+                out.push(ch);
+                i += ch.len_utf8();
+                if ch == '\n' {
+                    mode = Mode::Normal;
+                    normal_start = i;
+                }
+            }
+            Mode::BlockComment { depth } => {
+                if input[i..].starts_with("※（") {
+                    out.push_str("※（");
+                    i += "※（".len();
+                    mode = Mode::BlockComment { depth: depth + 1 };
+                    continue;
+                }
+                if input[i..].starts_with("）※") {
+                    out.push_str("）※");
+                    i += "）※".len();
+                    if depth == 1 {
+                        mode = Mode::Normal;
+                        normal_start = i;
+                    } else {
+                        mode = Mode::BlockComment { depth: depth - 1 };
+                    }
+                    continue;
+                }
+                let ch = input[i..]
+                    .chars()
+                    .next()
+                    .expect("valid UTF-8 boundary while normalizing");
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+    }
+
+    if mode == Mode::Normal && normal_start < input.len() {
+        out.push_str(&input[normal_start..].nfkc().collect::<String>());
+    }
+
+    out
 }

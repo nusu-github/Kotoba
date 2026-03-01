@@ -8,5 +8,9 @@ fn conformance_smoke() {
         .output()
         .expect("run conformance");
 
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

@@ -11,7 +11,7 @@ kotoba test [--filter <CASE_ID>]
 ```
 
 - `run`: コンパイルして実行
-- `check`: 実行せずに静的検証（字句/構文/意味/コンパイル）
+- `check`: 実行せずに静的検証（モジュール解決 + 字句/構文/意味）
 - `test`: `tests/conformance/manifest.yaml` のケースを実行
 
 ## モジュール解決
@@ -40,6 +40,22 @@ cargo test
 cargo run -- test
 cargo run -- test --filter RUN-ACCEPT-001
 ```
+
+`test` は次を事前検証します。
+
+- `cases` / `catalog` のケースID重複がないこと
+- `cases` の `input` が空でないこと
+- `cases` に `@` プレースホルダ入力が残っていないこと
+- 同一入力の過剰重複（8件超過）がないこと
+
+## 安全ガード（暫定）
+
+異常入力時のハングアップ回避として、次の解析ステップ上限を有効化しています。
+
+- `KOTOBA_PARSE_STEP_LIMIT`（既定: `500000`）
+- `KOTOBA_ANALYZE_STEP_LIMIT`（既定: `500000`）
+
+必要時のみ最小限で調整してください。
 
 ## 参照仕様
 

@@ -14,7 +14,7 @@ cases:
   - id: CHECK-REJECT-001
     mode: check
     expect: reject
-    input: "@"
+    input: "名前 「太郎」"
 
   - id: CHECK-REJECT-002
     mode: check
@@ -100,3 +100,2268 @@ cases:
         e
       必ず行う
         「後の例外」と 訴える
+
+  - id: SYA008
+    mode: check
+    expect: accept
+    input: |
+      挨拶する という 手順【名前:を】
+        名前を 返す
+
+  - id: SYA026
+    mode: check
+    expect: accept
+    input: |
+      試す
+        1
+
+  - id: SYA029
+    mode: check
+    expect: accept
+    input: |
+      試す
+        1
+      必ず行う
+        2
+
+  - id: SYA031
+    mode: check
+    expect: accept
+    input: "【1、2、3】"
+
+  - id: SYA032
+    mode: check
+    expect: accept
+    input: "｛名前:「太郎」、年齢:25｝"
+
+  - id: SYA035
+    mode: check
+    expect: accept
+    input: "aとbの和"
+
+  - id: SYA040
+    mode: check
+    expect: accept
+    input: "aが bより大きい"
+
+  - id: SYA047
+    mode: check
+    expect: accept
+    input: "これの値"
+
+  - id: SYR005
+    mode: check
+    expect: reject
+    input: |
+      公開 名前は「太郎」
+
+  - id: SYR035
+    mode: check
+    expect: reject
+    input: |
+      それ
+
+  - id: SYR036
+    mode: check
+    expect: reject
+    input: |
+      あれ
+
+  - id: SYR044
+    mode: check
+    expect: reject
+    input: |
+      処理A しながら 処理B
+
+  - id: SYR052
+    mode: check
+    expect: reject
+    input: |
+      待つ という 手順
+
+  - id: SYA001
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: SYA002
+    mode: check
+    expect: accept
+    input: "変わる 数は0"
+
+  - id: SYA003
+    mode: check
+    expect: accept
+    input: "数を 1に 変える"
+
+  - id: SYA004
+    mode: check
+    expect: accept
+    input: "返す"
+
+  - id: SYA005
+    mode: check
+    expect: accept
+    input: "1を 返す"
+
+  - id: SYA017
+    mode: check
+    expect: accept
+    input: |
+      もし 真 ならば
+        1
+      そうでなければ
+        2
+
+  - id: SYA018
+    mode: check
+    expect: accept
+    input: |
+      もし 偽 ならば
+        1
+      もしくは 真 ならば
+        2
+      そうでなければ
+        3
+
+  - id: SYA034
+    mode: check
+    expect: accept
+    input: "（1と2の和）"
+
+  - id: SYA042
+    mode: check
+    expect: accept
+    input: "aが真 かつ bが真"
+
+  - id: SYA043
+    mode: check
+    expect: accept
+    input: "aが真 または bが真 かつ cが真"
+
+  - id: SYR008
+    mode: check
+    expect: reject
+    input: |
+      数を 1に
+
+  - id: SYR009
+    mode: check
+    expect: reject
+    input: |
+      次へ
+
+  - id: SYR010
+    mode: check
+    expect: reject
+    input: |
+      抜ける
+
+  - id: SYR011
+    mode: check
+    expect: reject
+    input: |
+      「数学」 使う
+
+  - id: SYR013
+    mode: check
+    expect: reject
+    input: |
+      もし 真
+        1
+
+  - id: SYR017
+    mode: check
+    expect: reject
+    input: |
+      5回
+        1
+
+  - id: SYR021
+    mode: check
+    expect: reject
+    input: |
+      試す
+
+  - id: SYR022
+    mode: check
+    expect: reject
+    input: |
+      失敗した場合
+        0
+
+  - id: SYR023
+    mode: check
+    expect: reject
+    input: |
+      必ず行う
+        0
+
+  - id: SYR026
+    mode: check
+    expect: reject
+    input: "【1、、2】"
+
+  - id: SYR027
+    mode: check
+    expect: reject
+    input: "｛名前「太郎」｝"
+
+  - id: SYR028
+    mode: check
+    expect: reject
+    input: "｛名前:「太郎」"
+
+  - id: SYR029
+    mode: check
+    expect: reject
+    input: "aが より大きい"
+
+  - id: SYR030
+    mode: check
+    expect: reject
+    input: "aが真 かつ"
+
+  - id: SYR031
+    mode: check
+    expect: reject
+    input: "「x」を"
+
+  - id: SYR034
+    mode: check
+    expect: reject
+    input: |
+      これ
+
+  - id: SYR037
+    mode: check
+    expect: reject
+    input: |
+      これの
+
+  - id: SYR038
+    mode: check
+    expect: reject
+    input: |
+      こう
+
+  - id: SYR041
+    mode: check
+    expect: reject
+    input: |
+      「a.csv」を 読んで、行に分けて
+
+  - id: SYR043
+    mode: check
+    expect: reject
+    input: |
+      分岐して
+        もし 真 ならば
+          1
+
+  - id: SYA006
+    mode: check
+    expect: accept
+    input: |
+      5回 繰り返す
+        次へ
+
+  - id: SYA007
+    mode: check
+    expect: accept
+    input: |
+      5回 繰り返す
+        抜ける
+
+  - id: SYA009
+    mode: check
+    expect: accept
+    input: |
+      送る という 手順【内容:を、宛先:に】
+        返す
+
+  - id: SYA027
+    mode: check
+    expect: accept
+    input: |
+      試す
+        1
+      失敗した場合
+        0
+
+  - id: SYA028
+    mode: check
+    expect: accept
+    input: |
+      試す
+        1
+      失敗した場合【問題:で】
+        0
+
+  - id: SYA030
+    mode: check
+    expect: accept
+    input: |
+      試す
+        1
+      失敗した場合
+        0
+      必ず行う
+        2
+
+  - id: SYA036
+    mode: check
+    expect: accept
+    input: "aとbの差"
+
+  - id: SYA037
+    mode: check
+    expect: accept
+    input: "aとbの積"
+
+  - id: SYA038
+    mode: check
+    expect: accept
+    input: "aを bで 割る"
+
+  - id: SYA039
+    mode: check
+    expect: accept
+    input: "aを bで 割った余り"
+
+  - id: SYA041
+    mode: check
+    expect: accept
+    input: "aが bと 等しい"
+
+  - id: SYA044
+    mode: check
+    expect: accept
+    input: "「x」を 「y」に 複製する"
+
+  - id: SYA045
+    mode: check
+    expect: accept
+    input: "「y」に 「x」を 複製する"
+
+  - id: SYA046
+    mode: check
+    expect: accept
+    input: "人の所属の名前"
+
+  - id: SYA048
+    mode: check
+    expect: accept
+    input: "それの値"
+
+  - id: SYA049
+    mode: check
+    expect: accept
+    input: "あれの設定"
+
+  - id: SYA015
+    mode: check
+    expect: accept
+    input: "「数学」を 使う"
+
+  - id: SYA016
+    mode: check
+    expect: accept
+    input: "「数学」から 「平方根」を 使う"
+
+  - id: SYR012
+    mode: check
+    expect: reject
+    input: |
+      「数学」から 使う
+
+  - id: SYR014
+    mode: check
+    expect: reject
+    input: |
+      もし 真 ならば
+        1
+      もしくは 偽
+        2
+
+  - id: SYR015
+    mode: check
+    expect: reject
+    input: |
+      値は どれかを調べる
+        1
+          2
+
+  - id: SYR016
+    mode: check
+    expect: reject
+    input: |
+      値は どれかを調べる
+        どれでもない
+          0
+
+  - id: SYR006
+    mode: check
+    expect: reject
+    input: "名前 「太郎」"
+
+  - id: SYR007
+    mode: check
+    expect: reject
+    input: "数を 1 変える"
+
+  - id: SYR032
+    mode: check
+    expect: reject
+    input: "「x」の 複製する"
+
+  - id: SYR039
+    mode: check
+    expect: reject
+    input: "「a.csv」を 読んで 行に分ける"
+
+  - id: SYR050
+    mode: check
+    expect: reject
+    input: "人 は 表示できる を持つ"
+
+  - id: SYR024
+    mode: check
+    expect: reject
+    input: |
+      試す
+        1
+      失敗した場合【問題:を】
+        0
+
+  - id: SYA022
+    mode: check
+    expect: accept
+    input: |
+      5回 繰り返す【i】
+        iを 表示する
+
+  - id: SYA023
+    mode: check
+    expect: accept
+    input: |
+      1から 10まで 繰り返す【i】
+        iを 表示する
+
+  - id: SYA024
+    mode: check
+    expect: accept
+    input: |
+      xが 10より小さい 間 繰り返す
+        xを xと1の和に 変える
+
+  - id: SYA033
+    mode: check
+    expect: accept
+    input: "（【x:を】 xとxの積）"
+
+  - id: SYR002
+    mode: check
+    expect: reject
+    input: "a、b"
+
+  - id: SYR003
+    mode: check
+    expect: reject
+    input: |
+      表示する という 手順【:を】
+        返す
+
+  - id: SYR004
+    mode: check
+    expect: reject
+    input: |
+      返す という 手順【x:を】
+        xを返す
+
+  - id: SYR018
+    mode: check
+    expect: reject
+    input: |
+      1から 10 繰り返す【i】
+        i
+
+  - id: SYR019
+    mode: check
+    expect: reject
+    input: |
+      xが真 繰り返す
+        1
+
+  - id: SYR020
+    mode: check
+    expect: reject
+    input: |
+      一覧の それぞれについて
+        1
+
+  - id: SYR025
+    mode: check
+    expect: reject
+    input: "（【:を】1）"
+
+  - id: SYR033
+    mode: check
+    expect: reject
+    input: "「x」は 複製する"
+
+  - id: SYR040
+    mode: check
+    expect: reject
+    input: "「a.csv」を 読んで、「b」を 加えて、表示する"
+
+  - id: SYR042
+    mode: check
+    expect: reject
+    input: |
+      「a.csv」を 読んで、分岐して
+        もし 真 ならば
+          1
+      表示する
+
+  - id: SYA010
+    mode: check
+    expect: accept
+    input: |
+      公開 足す という 手順【a:を、b:に】
+        aとbの和を 返す
+
+  - id: SYR045
+    mode: check
+    expect: reject
+    input: |
+      移す という 手順【元:を、先:を】
+        返す
+
+  - id: SYR047
+    mode: check
+    expect: reject
+    input: |
+      足す という 手順【a:を】
+
+  - id: SYR048
+    mode: check
+    expect: reject
+    input: |
+      人 という 組
+
+  - id: SYR049
+    mode: check
+    expect: reject
+    input: |
+      表示できる という 特性
+
+  - id: SYR051
+    mode: check
+    expect: reject
+    input: "【先頭…、残り】は 【1、2】"
+
+  - id: SYR046
+    mode: check
+    expect: reject
+    input: |
+      公開 公開 足す という 手順【a:を】
+        aを返す
+
+  - id: SYA011
+    mode: check
+    expect: accept
+    input: |
+      人 という 組
+        名前は 文字列
+
+  - id: SYA012
+    mode: check
+    expect: accept
+    input: |
+      表示できる という 特性
+        文字列にする という 手順
+
+  - id: SYA013
+    mode: check
+    expect: accept
+    input: |
+      公開 人 という 組
+        名前は 文字列
+
+  - id: SYA014
+    mode: check
+    expect: accept
+    input: |
+      人は 表示できる を持つ
+        文字列にする という 手順
+          返す
+
+  - id: SYA021
+    mode: check
+    expect: accept
+    input: |
+      5回 繰り返す
+        表示する
+
+  - id: SYA025
+    mode: check
+    expect: accept
+    input: |
+      一覧の それぞれについて【e】
+        eを 表示する
+
+  - id: SYR001
+    mode: check
+    expect: reject
+    input: |
+      もし 真 ならば
+      	1
+        2
+
+  - id: SYA019
+    mode: check
+    expect: accept
+    input: |
+      値は どれかを調べる
+        1の場合
+          10
+        どれでもない場合
+          0
+
+  - id: SYA020
+    mode: check
+    expect: accept
+    input: |
+      値は どれかを調べる
+        【どれか、x】の場合
+          x
+        どれでもない場合
+          0
+
+  - id: SYA051
+    mode: check
+    expect: accept
+    input: |
+      「a.csv」を 読んで、行に分けて、表示する
+
+  - id: SYA052
+    mode: check
+    expect: accept
+    input: |
+      「a.csv」を 読んで、分岐して
+        もし 真 ならば
+          「成功」を 返す
+        そうでなければ
+          「失敗」を 返す
+      表示する
+
+  - id: SYA050
+    mode: check
+    expect: accept
+    input: |
+      階乗 という 手順【n:を】
+        こう
+
+  - id: SEA003
+    mode: check
+    expect: accept
+    input: |
+      送る という 手順【内容:を、宛先:に、方法:で】
+        返す
+      「手紙」を 「東京」に 「速達」で 送る
+
+  - id: SEA004
+    mode: check
+    expect: accept
+    input: |
+      「a.csv」を 読んで、行に分けて、表示する
+
+  - id: SEA005
+    mode: check
+    expect: accept
+    input: |
+      複製する という 手順【元:を、先:に】
+        返す
+      「x」を 「y」に 複製する
+
+  - id: SEA006
+    mode: check
+    expect: accept
+    input: |
+      結果は 試す
+        「a.csv」を 読んで、行に分けて、表示する
+      失敗した場合【e:で】
+        e
+
+  - id: SEA007
+    mode: check
+    expect: accept
+    input: "3秒"
+
+  - id: SEA008
+    mode: check
+    expect: accept
+    input: "3秒と5秒の和"
+
+  - id: SEA009
+    mode: check
+    expect: accept
+    input: "999999999999999999"
+
+  - id: SEA010
+    mode: check
+    expect: accept
+    input: "1を2で割る"
+
+  - id: SEA011
+    mode: check
+    expect: accept
+    input: "3と1.5の和"
+
+  - id: SEA012
+    mode: check
+    expect: accept
+    input: "1が1.0と等しい"
+
+  - id: SEA013
+    mode: check
+    expect: accept
+    input: "NaNがNaNと等しくない"
+
+  - id: SEA014
+    mode: check
+    expect: accept
+    input: |
+      値は もし 真 ならば
+        1
+      そうでなければ
+        2
+
+  - id: SEA016
+    mode: check
+    expect: accept
+    input: |
+      値は 試す
+        1
+
+  - id: SEA017
+    mode: check
+    expect: accept
+    input: |
+      値は 試す
+        1
+      必ず行う
+        999
+
+  - id: SEA020
+    mode: run
+    expect: accept
+    input: |
+      xは 1
+      xと 表示する
+
+  - id: SEA028
+    mode: check
+    expect: accept
+    input: |
+      「数学」から 「平方根」を 「絶対値」を 使う
+
+  - id: SER003
+    mode: check
+    expect: reject
+    input: |
+      足す という 手順【左:を、右:に】
+        左と右の和を 返す
+      結果 は 1を 足す
+
+  - id: SER007
+    mode: check
+    expect: reject
+    input: |
+      複製する という 手順【元:を、先:に】
+        返す
+      「x」を 複製する
+
+  - id: SER010
+    mode: check
+    expect: reject
+    input: "3秒と5回の和"
+
+  - id: SER022
+    mode: check
+    expect: reject
+    input: |
+      公開 名前は「太郎」
+
+  - id: SER024
+    mode: check
+    expect: reject
+    input: |
+      待つ
+
+  - id: SER026
+    mode: check
+    expect: reject
+    input: |
+      これ
+
+  - id: SER027
+    mode: check
+    expect: reject
+    input: |
+      足す という 手順【左:を、右:に】
+        左と右の和を 返す
+      結果 は 1を 足す
+
+  - id: SER028
+    mode: check
+    expect: reject
+    input: |
+      値 は 1秒と2メートルの和
+
+  - id: SER029
+    mode: check
+    expect: reject
+    input: |
+      背景で
+
+  - id: SEA001
+    mode: check
+    expect: accept
+    input: "それのx"
+
+  - id: SEA002
+    mode: check
+    expect: accept
+    input: "あれの設定"
+
+  - id: SEA015
+    mode: check
+    expect: accept
+    input: |
+      値は 5回 繰り返す
+        表示する
+
+  - id: SEA018
+    mode: check
+    expect: accept
+    input: |
+      内部手順 という 手順
+        返す
+
+  - id: SEA019
+    mode: check
+    expect: accept
+    input: |
+      公開 足す という 手順【a:を、b:に】
+        aとbの和を 返す
+      1を 2に 足す
+
+  - id: SEA021
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: SEA022
+    mode: check
+    expect: accept
+    input: |
+      足す という 手順【左:を、右:に】
+        左と右の和を 返す
+      結果 は 1を 2に 足す
+
+  - id: SEA023
+    mode: check
+    expect: accept
+    input: "1秒と2秒の和"
+
+  - id: SEA024
+    mode: check
+    expect: accept
+    input: |
+      公開 足す という 手順【a:を、b:に】
+        aとbの和を 返す
+
+  - id: SEA025
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: SEA026
+    mode: check
+    expect: accept
+    input: |
+      結果は 試す
+        「元の例外」と 訴える
+      失敗した場合【e:で】
+        e
+      必ず行う
+        「後の例外」と 訴える
+
+  - id: SEA027
+    mode: check
+    expect: accept
+    input: |
+      複製する という 手順【元:を、先:に】
+        返す
+      「x」を 「y」に 複製する
+
+  - id: SEA029
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: SEA030
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: SER001
+    mode: check
+    expect: reject
+    input: |
+      それ
+
+  - id: SER002
+    mode: check
+    expect: reject
+    input: |
+      あれ
+
+  - id: SER004
+    mode: check
+    expect: reject
+    input: |
+      足す という 手順【左:を、右:に】
+        左と右の和を 返す
+      結果 は 1を 足す
+
+  - id: SER005
+    mode: check
+    expect: reject
+    input: |
+      「a.csv」を 読んで、行に分けて
+
+  - id: SER006
+    mode: check
+    expect: reject
+    input: "「x」は 複製する"
+
+  - id: SER008
+    mode: check
+    expect: reject
+    input: |
+      「a.csv」を 読んで、行に分けて
+
+  - id: SER009
+    mode: check
+    expect: reject
+    input: "これ"
+
+  - id: SER011
+    mode: check
+    expect: reject
+    input: "数を 1 変える"
+
+  - id: SER012
+    mode: check
+    expect: reject
+    input: "数を 1 変える"
+
+  - id: SER013
+    mode: check
+    expect: reject
+    input: "数を 1 変える"
+
+  - id: SER014
+    mode: check
+    expect: reject
+    input: "数を 1 変える"
+
+  - id: SER015
+    mode: check
+    expect: reject
+    input: |
+      もし 真
+        1
+
+  - id: SER016
+    mode: check
+    expect: reject
+    input: |
+      抜ける
+
+  - id: SER017
+    mode: check
+    expect: reject
+    input: "試す"
+
+  - id: SER018
+    mode: check
+    expect: reject
+    input: "失敗した場合"
+
+  - id: SER019
+    mode: check
+    expect: reject
+    input: "必ず行う"
+
+  - id: SER020
+    mode: check
+    expect: reject
+    input: |
+      公開 名前は「太郎」
+
+  - id: SER021
+    mode: check
+    expect: reject
+    input: |
+      公開 名前は「太郎」
+
+  - id: SER023
+    mode: check
+    expect: reject
+    input: |
+      待つ
+
+  - id: SER025
+    mode: check
+    expect: reject
+    input: "名前 「太郎」"
+
+  - id: SER030
+    mode: check
+    expect: reject
+    input: "背景で"
+
+  - id: DOCA001
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: DOCA002
+    mode: check
+    expect: accept
+    input: "年齢は20"
+
+  - id: DOCA003
+    mode: check
+    expect: accept
+    input: "都市は「東京」"
+
+  - id: DOCA004
+    mode: check
+    expect: accept
+    input: "結果は 1と2の和"
+
+  - id: DOCA005
+    mode: check
+    expect: accept
+    input: "【1、2、3】"
+
+  - id: DOCA006
+    mode: check
+    expect: accept
+    input: "｛名前:「太郎」｝"
+
+  - id: DOCA007
+    mode: check
+    expect: accept
+    input: |
+      もし 真 ならば
+        1
+      そうでなければ
+        2
+
+  - id: DOCA008
+    mode: check
+    expect: accept
+    input: "「math」を 使う"
+
+  - id: DOCR001
+    mode: check
+    expect: reject
+    input: "#DOCR001"
+
+  - id: DOCR002
+    mode: check
+    expect: reject
+    input: "$DOCR002"
+
+  - id: DOCR003
+    mode: check
+    expect: reject
+    input: "%DOCR003"
+
+  - id: DOCR004
+    mode: check
+    expect: reject
+    input: "&DOCR004"
+
+  - id: DOCR005
+    mode: check
+    expect: reject
+    input: "`DOCR005"
+
+  - id: DOCR006
+    mode: check
+    expect: reject
+    input: "~DOCR006"
+
+  - id: DOCR007
+    mode: check
+    expect: reject
+    input: "?DOCR007"
+
+  - id: DOCR008
+    mode: check
+    expect: reject
+    input: "=DOCR008"
+
+  - id: LXA001
+    mode: check
+    expect: accept
+    input: "名前は「太郎」"
+
+  - id: LXA002
+    mode: check
+    expect: accept
+    input: "aは1。bは2"
+
+  - id: LXA003
+    mode: check
+    expect: accept
+    input: "都市は「大阪」"
+
+  - id: LXA004
+    mode: check
+    expect: accept
+    input: "「a.csv」を 読んで、行に分けて、表示する"
+
+  - id: LXA005
+    mode: check
+    expect: accept
+    input: "名前を 表示する"
+
+  - id: LXA006
+    mode: check
+    expect: accept
+    input: "地点まで 行く"
+
+  - id: LXA007
+    mode: check
+    expect: accept
+    input: "人の名前"
+
+  - id: LXA008
+    mode: check
+    expect: accept
+    input: |
+      値は どれかを調べる
+        1の場合
+          10
+        どれでもない場合
+          0
+
+  - id: LXA009
+    mode: check
+    expect: accept
+    input: "5秒"
+
+  - id: LXA010
+    mode: check
+    expect: accept
+    input: "100ピクセル"
+
+  - id: LXA011
+    mode: check
+    expect: accept
+    input: "返す"
+
+  - id: LXA012
+    mode: check
+    expect: accept
+    input: "名前は「次郎」"
+
+  - id: LXR001
+    mode: check
+    expect: reject
+    input: "#LXR001"
+
+  - id: LXR002
+    mode: check
+    expect: reject
+    input: "$LXR002"
+
+  - id: LXR003
+    mode: check
+    expect: reject
+    input: "%LXR003"
+
+  - id: LXR004
+    mode: check
+    expect: reject
+    input: "&LXR004"
+
+  - id: LXR005
+    mode: check
+    expect: reject
+    input: "`LXR005"
+
+  - id: LXR006
+    mode: check
+    expect: reject
+    input: "~LXR006"
+
+  - id: LXR007
+    mode: check
+    expect: reject
+    input: "?LXR007"
+
+  - id: LXR008
+    mode: check
+    expect: reject
+    input: "=LXR008"
+
+  - id: LXR009
+    mode: check
+    expect: reject
+    input: "<LXR009"
+
+  - id: LXR010
+    mode: check
+    expect: reject
+    input: ">LXR010"
+
+  - id: LXR011
+    mode: check
+    expect: reject
+    input: "\\LXR011"
+
+  - id: LXR012
+    mode: check
+    expect: reject
+    input: ";LXR012"
+
+catalog:
+  - id: 'DOCA001'
+    norms: ['GEN-001', 'CNF-001']
+    verdict: 'accept'
+    input_note: 'v1 文書全体'
+    expected_note: '14 章構成と適用範囲が存在する'
+  - id: 'DOCA002'
+    norms: ['GEN-005']
+    verdict: 'accept'
+    input_note: 'v1 各節'
+    expected_note: '`[規範]` と `[参考]` ラベルが併記される'
+  - id: 'DOCA003'
+    norms: ['GEN-004']
+    verdict: 'accept'
+    input_note: 'v1 1.3'
+    expected_note: 'MUST/SHOULD/MAY の意味が定義される'
+  - id: 'DOCA004'
+    norms: ['CNF-003']
+    verdict: 'accept'
+    input_note: '台帳 2 章'
+    expected_note: '構文 52/52 が明示される'
+  - id: 'DOCA005'
+    norms: ['CNF-004']
+    verdict: 'accept'
+    input_note: '台帳全表'
+    expected_note: 'ケース ID を一意キーとして追跡可能'
+  - id: 'DOCA006'
+    norms: ['CNF-005']
+    verdict: 'accept'
+    input_note: 'v1 3 章と本文'
+    expected_note: '規範本文の構文参照が EBNF に存在する'
+  - id: 'DOCA007'
+    norms: ['DIFF-001']
+    verdict: 'accept'
+    input_note: '差分文書'
+    expected_note: '互換破壊が理由付きで列挙される'
+  - id: 'DOCA008'
+    norms: ['GEN-003']
+    verdict: 'accept'
+    input_note: '用語定義'
+    expected_note: '同一語の多重定義がない'
+  - id: 'DOCR001'
+    norms: ['GEN-001']
+    verdict: 'reject'
+    input_note: '章 8, 9, 10 を削除'
+    expected_note: '適用範囲不備（仕様不足）'
+  - id: 'DOCR002'
+    norms: ['GEN-005']
+    verdict: 'reject'
+    input_note: 'ラベルなし本文'
+    expected_note: '規範/参考区別なし'
+  - id: 'DOCR003'
+    norms: ['GEN-004']
+    verdict: 'reject'
+    input_note: 'MUST 未定義'
+    expected_note: '規範キーワード未定義'
+  - id: 'DOCR004'
+    norms: ['CNF-003']
+    verdict: 'reject'
+    input_note: '構文 49/48'
+    expected_note: '件数要件未達'
+  - id: 'DOCR005'
+    norms: ['CNF-004']
+    verdict: 'reject'
+    input_note: 'ケース ID 重複'
+    expected_note: '一意キー違反'
+  - id: 'DOCR006'
+    norms: ['CNF-005']
+    verdict: 'reject'
+    input_note: '本文に文法未定義構文追加'
+    expected_note: 'EBNF 未定義違反'
+  - id: 'DOCR007'
+    norms: ['DIFF-001']
+    verdict: 'reject'
+    input_note: '差分文書なし'
+    expected_note: '差分列挙欠落'
+  - id: 'DOCR008'
+    norms: ['GEN-003']
+    verdict: 'reject'
+    input_note: '`それ` を二義定義'
+    expected_note: '用語矛盾'
+  - id: 'LXA001'
+    norms: ['LEX-001']
+    verdict: 'accept'
+    input_note: '`名前は「太郎」`'
+    expected_note: 'リテラル/識別子/束縛助詞が区別される'
+  - id: 'LXA002'
+    norms: ['LEX-002']
+    verdict: 'accept'
+    input_note: '`aは1。bは2`'
+    expected_note: '`。` が `SEP` として処理される'
+  - id: 'LXA003'
+    norms: ['LEX-003']
+    verdict: 'accept'
+    input_note: 'スペースのみインデント'
+    expected_note: '`INDENT/DEDENT` 生成'
+  - id: 'LXA004'
+    norms: ['LEX-004']
+    verdict: 'accept'
+    input_note: '`読んで、分けて、表示する`'
+    expected_note: '`、` が連鎖区切りとして扱われる'
+  - id: 'LXA005'
+    norms: ['LEX-005']
+    verdict: 'accept'
+    input_note: '`名前を`'
+    expected_note: '`名前` + `を` に分離'
+  - id: 'LXA006'
+    norms: ['LEX-005']
+    verdict: 'accept'
+    input_note: '`地点まで`'
+    expected_note: '`地点` + `まで` に分離'
+  - id: 'LXA007'
+    norms: ['LEX-006']
+    verdict: 'accept'
+    input_note: '`人の名前`'
+    expected_note: '`の` はアクセス助詞'
+  - id: 'LXA008'
+    norms: ['LEX-007']
+    verdict: 'accept'
+    input_note: '`どれかを調べる`'
+    expected_note: '単一キーワード化'
+  - id: 'LXA009'
+    norms: ['LEX-008']
+    verdict: 'accept'
+    input_note: '`5秒`'
+    expected_note: '助数詞付き数値として字句化'
+  - id: 'LXA010'
+    norms: ['LEX-009']
+    verdict: 'accept'
+    input_note: '`100ピクセル`'
+    expected_note: 'カタカナ助数詞を認識'
+  - id: 'LXA011'
+    norms: ['LEX-010']
+    verdict: 'accept'
+    input_note: '`返す`'
+    expected_note: '予約語トークン'
+  - id: 'LXA012'
+    norms: ['LEX-011']
+    verdict: 'accept'
+    input_note: '`しながら`'
+    expected_note: '未実装予約語として認識'
+  - id: 'LXR001'
+    norms: ['LEX-002']
+    verdict: 'reject'
+    input_note: '改行と `。` を区別実装'
+    expected_note: '文区切り正規化違反'
+  - id: 'LXR002'
+    norms: ['LEX-003']
+    verdict: 'reject'
+    input_note: 'タブとスペース混在'
+    expected_note: 'インデント混在エラー'
+  - id: 'LXR003'
+    norms: ['LEX-004']
+    verdict: 'reject'
+    input_note: '`a、b`（非連鎖文脈）'
+    expected_note: '`、` 用途違反'
+  - id: 'LXR004'
+    norms: ['LEX-005']
+    verdict: 'reject'
+    input_note: '`名前を` を未分離'
+    expected_note: '助詞付着未分離'
+  - id: 'LXR005'
+    norms: ['LEX-005']
+    verdict: 'reject'
+    input_note: '`地点まで` を `ま` `で` 分割'
+    expected_note: '最長一致違反'
+  - id: 'LXR006'
+    norms: ['LEX-006']
+    verdict: 'reject'
+    input_note: '`の` を役割助詞扱い'
+    expected_note: '助詞カテゴリ違反'
+  - id: 'LXR007'
+    norms: ['LEX-007']
+    verdict: 'reject'
+    input_note: '`そうでなければ` を分割'
+    expected_note: 'キーワード優先違反'
+  - id: 'LXR008'
+    norms: ['LEX-009']
+    verdict: 'reject'
+    input_note: '`5びょう`'
+    expected_note: 'ひらがな助数詞禁止'
+  - id: 'LXR009'
+    norms: ['LEX-010']
+    verdict: 'reject'
+    input_note: '`返す` を識別子扱い'
+    expected_note: '予約語違反'
+  - id: 'LXR010'
+    norms: ['LEX-011']
+    verdict: 'reject'
+    input_note: '`待つ` を通常識別子許可'
+    expected_note: '将来予約語違反'
+  - id: 'LXR011'
+    norms: ['LEX-012']
+    verdict: 'reject'
+    input_note: '位置情報なし字句エラー'
+    expected_note: '診断情報不足'
+  - id: 'LXR012'
+    norms: ['LEX-001']
+    verdict: 'reject'
+    input_note: 'トークン種別未分類'
+    expected_note: 'カテゴリ識別不備'
+  - id: 'SYA001'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`名前は「太郎」`'
+    expected_note: '束縛文として受理'
+  - id: 'SYA002'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`変わる 数は0`'
+    expected_note: '可変束縛文として受理'
+  - id: 'SYA003'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`数を 1に 変える`'
+    expected_note: '再束縛文として受理'
+  - id: 'SYA004'
+    norms: ['SYN-002', 'CAL-007']
+    verdict: 'accept'
+    input_note: '`返す`'
+    expected_note: '戻り文として受理'
+  - id: 'SYA005'
+    norms: ['SYN-002', 'CAL-007']
+    verdict: 'accept'
+    input_note: '`1を 返す`'
+    expected_note: '戻り値付き戻り文として受理'
+  - id: 'SYA006'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`5回 繰り返す\n  次へ`'
+    expected_note: 'ループ内 `次へ` 受理'
+  - id: 'SYA007'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`5回 繰り返す\n  抜ける`'
+    expected_note: 'ループ内 `抜ける` 受理'
+  - id: 'SYA008'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`挨拶する という 手順【名前:を】\n  名前を 返す`'
+    expected_note: '手順定義受理'
+  - id: 'SYA009'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`送る という 手順【内容:を、宛先:に】\n  返す`'
+    expected_note: '複数仮引数受理'
+  - id: 'SYA010'
+    norms: ['SYN-005']
+    verdict: 'accept'
+    input_note: '`公開 足す という 手順【a:を、b:に】\n  aとbの和を 返す`'
+    expected_note: '公開手順定義受理'
+  - id: 'SYA011'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`人 という 組\n  名前は 文字列`'
+    expected_note: '組定義受理'
+  - id: 'SYA012'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`表示できる という 特性\n  文字列にする という 手順`'
+    expected_note: '特性定義受理'
+  - id: 'SYA013'
+    norms: ['SYN-005']
+    verdict: 'accept'
+    input_note: '`公開 人 という 組\n  名前は 文字列`'
+    expected_note: '公開組定義受理'
+  - id: 'SYA014'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`人は 表示できる を持つ\n  文字列にする という 手順\n    返す`'
+    expected_note: '特性実装受理'
+  - id: 'SYA015'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`「数学」を 使う`'
+    expected_note: 'use 文受理'
+  - id: 'SYA016'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`「数学」から 「平方根」を 使う`'
+    expected_note: 'from use 文受理'
+  - id: 'SYA017'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`もし 真 ならば\n  1\nそうでなければ\n  2`'
+    expected_note: 'if 式受理'
+  - id: 'SYA018'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`もし 偽 ならば\n  1\nもしくは 真 ならば\n  2\nそうでなければ\n  3`'
+    expected_note: 'if-elif-else 受理'
+  - id: 'SYA019'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`値は どれかを調べる\n  1の場合\n    10\n  どれでもない場合\n    0`'
+    expected_note: 'match 受理'
+  - id: 'SYA020'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`値は どれかを調べる\n  【どれか、x】の場合\n    x\n  どれでもない場合\n    0`'
+    expected_note: 'パターンアーム受理'
+  - id: 'SYA021'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`5回 繰り返す\n  表示する`'
+    expected_note: '回数ループ受理'
+  - id: 'SYA022'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`5回 繰り返す【i】\n  iを 表示する`'
+    expected_note: '回数ループ変数受理'
+  - id: 'SYA023'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`1から 10まで 繰り返す【i】\n  iを 表示する`'
+    expected_note: '範囲ループ受理'
+  - id: 'SYA024'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`xが 10より小さい 間 繰り返す\n  xを xと1の和に 変える`'
+    expected_note: 'while 受理'
+  - id: 'SYA025'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`一覧の それぞれについて【e】\n  eを 表示する`'
+    expected_note: 'foreach 受理'
+  - id: 'SYA026'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`試す\n  1`'
+    expected_note: 'try 単独受理'
+  - id: 'SYA027'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`試す\n  1\n失敗した場合\n  0`'
+    expected_note: 'try-catch 受理'
+  - id: 'SYA028'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`試す\n  1\n失敗した場合【問題:で】\n  0`'
+    expected_note: 'try-catch 引数受理'
+  - id: 'SYA029'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`試す\n  1\n必ず行う\n  2`'
+    expected_note: 'try-finally 受理'
+  - id: 'SYA030'
+    norms: ['SYN-002']
+    verdict: 'accept'
+    input_note: '`試す\n  1\n失敗した場合\n  0\n必ず行う\n  2`'
+    expected_note: 'try-catch-finally 受理'
+  - id: 'SYA031'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`【1、2、3】`'
+    expected_note: '一覧リテラル受理'
+  - id: 'SYA032'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`｛名前:「太郎」、年齢:25｝`'
+    expected_note: '対応表リテラル受理'
+  - id: 'SYA033'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`（【x:を】 xとxの積）`'
+    expected_note: 'ラムダ受理'
+  - id: 'SYA034'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`（1と2の和）`'
+    expected_note: '括弧式受理'
+  - id: 'SYA035'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aとbの和`'
+    expected_note: '算術糖衣（和）受理'
+  - id: 'SYA036'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aとbの差`'
+    expected_note: '算術糖衣（差）受理'
+  - id: 'SYA037'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aとbの積`'
+    expected_note: '算術糖衣（積）受理'
+  - id: 'SYA038'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aを bで 割る`'
+    expected_note: '割り算構文受理'
+  - id: 'SYA039'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aを bで 割った余り`'
+    expected_note: '余り構文受理'
+  - id: 'SYA040'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aが bより大きい`'
+    expected_note: '比較構文受理'
+  - id: 'SYA041'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`aが bと 等しい`'
+    expected_note: '等値構文受理'
+  - id: 'SYA042'
+    norms: ['SYN-006']
+    verdict: 'accept'
+    input_note: '`aが真 かつ bが真`'
+    expected_note: '論理 AND 受理'
+  - id: 'SYA043'
+    norms: ['SYN-006']
+    verdict: 'accept'
+    input_note: '`aが真 または bが真 かつ cが真`'
+    expected_note: '優先順位付き受理'
+  - id: 'SYA044'
+    norms: ['CAL-001']
+    verdict: 'accept'
+    input_note: '`「x」を 「y」に 複製する`'
+    expected_note: '助詞呼び出し受理'
+  - id: 'SYA045'
+    norms: ['CAL-001']
+    verdict: 'accept'
+    input_note: '`「y」に 「x」を 複製する`'
+    expected_note: '語順入替受理'
+  - id: 'SYA046'
+    norms: ['SYN-001']
+    verdict: 'accept'
+    input_note: '`人の所属の名前`'
+    expected_note: 'アクセス連鎖受理'
+  - id: 'SYA047'
+    norms: ['SCP-003']
+    verdict: 'accept'
+    input_note: '`これの値`'
+    expected_note: '明示こそあど受理'
+  - id: 'SYA048'
+    norms: ['SCP-003']
+    verdict: 'accept'
+    input_note: '`それの値`'
+    expected_note: '明示こそあど受理'
+  - id: 'SYA049'
+    norms: ['SCP-003']
+    verdict: 'accept'
+    input_note: '`あれの設定`'
+    expected_note: '明示こそあど受理'
+  - id: 'SYA050'
+    norms: ['SCP-006']
+    verdict: 'accept'
+    input_note: '`階乗 という 手順【n:を】\n  nと (nから1を引いたものを こうする)の積を 返す`'
+    expected_note: '`こう` 再帰参照受理'
+  - id: 'SYA051'
+    norms: ['CHN-001']
+    verdict: 'accept'
+    input_note: '`「a.csv」を 読んで、行に分けて、表示する`'
+    expected_note: 'て形チェイン受理'
+  - id: 'SYA052'
+    norms: ['CHN-004']
+    verdict: 'accept'
+    input_note: '`「a.csv」を 読んで、分岐して\n  もし 真 ならば\n    「成功」を 返す\n  そうでなければ\n    「失敗」を 返す\n表示する`'
+    expected_note: '分岐付きチェイン受理'
+  - id: 'SYR001'
+    norms: ['LEX-003']
+    verdict: 'reject'
+    input_note: 'タブ/スペース混在ブロック'
+    expected_note: 'インデント混在エラー'
+  - id: 'SYR002'
+    norms: ['LEX-004']
+    verdict: 'reject'
+    input_note: '`a、b`'
+    expected_note: '`、` は連鎖内のみ'
+  - id: 'SYR003'
+    norms: ['SYN-003']
+    verdict: 'reject'
+    input_note: '`表示する という 手順【:を】\n  返す`'
+    expected_note: '無名仮引数禁止'
+  - id: 'SYR004'
+    norms: ['SYN-004']
+    verdict: 'reject'
+    input_note: '`返す という 手順【x:を】\n  xを返す`'
+    expected_note: '`返す` を手順名にできない'
+  - id: 'SYR005'
+    norms: ['SYN-005']
+    verdict: 'reject'
+    input_note: '`公開 名前は「太郎」`'
+    expected_note: '`公開` 適用先不正'
+  - id: 'SYR006'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`名前 「太郎」`'
+    expected_note: '束縛マーカー `は` が必要'
+  - id: 'SYR007'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`数を 1 変える`'
+    expected_note: '`に` が必要'
+  - id: 'SYR008'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`数を 1に`'
+    expected_note: '`変える` が必要'
+  - id: 'SYR009'
+    norms: ['CTR-006']
+    verdict: 'reject'
+    input_note: '`次へ`'
+    expected_note: 'ループ外 `次へ` 禁止'
+  - id: 'SYR010'
+    norms: ['CTR-006']
+    verdict: 'reject'
+    input_note: '`抜ける`'
+    expected_note: 'ループ外 `抜ける` 禁止'
+  - id: 'SYR011'
+    norms: ['SYN-002']
+    verdict: 'reject'
+    input_note: '`「数学」 使う`'
+    expected_note: '`を` が必要'
+  - id: 'SYR012'
+    norms: ['SYN-002']
+    verdict: 'reject'
+    input_note: '`「数学」から 使う`'
+    expected_note: 'import 項目欠落'
+  - id: 'SYR013'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`もし 真\n  1`'
+    expected_note: '`ならば` 必須'
+  - id: 'SYR014'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`もし 真 ならば\n  1\nもしくは 偽\n  2`'
+    expected_note: '`もしくは` に `ならば` 必須'
+  - id: 'SYR015'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`値は どれかを調べる\n  1\n    2`'
+    expected_note: '`の場合` 必須'
+  - id: 'SYR016'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`値は どれかを調べる\n  どれでもない\n    0`'
+    expected_note: '`どれでもない場合` 必須'
+  - id: 'SYR017'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`5回\n  1`'
+    expected_note: '`繰り返す` 必須'
+  - id: 'SYR018'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`1から 10 繰り返す【i】\n  i`'
+    expected_note: '`まで` 必須'
+  - id: 'SYR019'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`xが真 繰り返す\n  1`'
+    expected_note: '`間` 必須'
+  - id: 'SYR020'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`一覧の それぞれについて\n  1`'
+    expected_note: 'foreach 変数必須'
+  - id: 'SYR021'
+    norms: ['SYN-002']
+    verdict: 'reject'
+    input_note: '`試す`'
+    expected_note: 'try 本体ブロック必須'
+  - id: 'SYR022'
+    norms: ['SYN-002']
+    verdict: 'reject'
+    input_note: '`失敗した場合\n  0`'
+    expected_note: 'try なし catch 禁止'
+  - id: 'SYR023'
+    norms: ['SYN-002']
+    verdict: 'reject'
+    input_note: '`必ず行う\n  0`'
+    expected_note: 'try なし finally 禁止'
+  - id: 'SYR024'
+    norms: ['SYN-002']
+    verdict: 'reject'
+    input_note: '`試す\n  1\n失敗した場合【問題:を】\n  0`'
+    expected_note: 'catch 引数助詞は `で` 固定'
+  - id: 'SYR025'
+    norms: ['SYN-003']
+    verdict: 'reject'
+    input_note: '`（【:を】1）`'
+    expected_note: '無名仮引数禁止'
+  - id: 'SYR026'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`【1、、2】`'
+    expected_note: '一覧要素欠落'
+  - id: 'SYR027'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`｛名前「太郎」｝`'
+    expected_note: '`:` 必須'
+  - id: 'SYR028'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`｛名前:「太郎」`'
+    expected_note: '`｝` 欠落'
+  - id: 'SYR029'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`aが より大きい`'
+    expected_note: '比較右項欠落'
+  - id: 'SYR030'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`aが真 かつ`'
+    expected_note: '論理右項欠落'
+  - id: 'SYR031'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`「x」を`'
+    expected_note: '動詞欠落'
+  - id: 'SYR032'
+    norms: ['LEX-006']
+    verdict: 'reject'
+    input_note: '`「x」の 複製する`'
+    expected_note: '`の` は役割助詞に使えない'
+  - id: 'SYR033'
+    norms: ['LEX-006']
+    verdict: 'reject'
+    input_note: '`「x」は 複製する`'
+    expected_note: '`は` は役割助詞に使えない'
+  - id: 'SYR034'
+    norms: ['SCP-003']
+    verdict: 'reject'
+    input_note: '`これ`'
+    expected_note: '単独こそあど禁止'
+  - id: 'SYR035'
+    norms: ['SCP-003']
+    verdict: 'reject'
+    input_note: '`それ`'
+    expected_note: '単独こそあど禁止'
+  - id: 'SYR036'
+    norms: ['SCP-003']
+    verdict: 'reject'
+    input_note: '`あれ`'
+    expected_note: '単独こそあど禁止'
+  - id: 'SYR037'
+    norms: ['SCP-003']
+    verdict: 'reject'
+    input_note: '`これの`'
+    expected_note: '識別子欠落'
+  - id: 'SYR038'
+    norms: ['SCP-006']
+    verdict: 'reject'
+    input_note: '`こう`（手順外）'
+    expected_note: '再帰参照文脈なし'
+  - id: 'SYR039'
+    norms: ['CHN-001']
+    verdict: 'reject'
+    input_note: '`「a.csv」を 読んで 行に分ける`'
+    expected_note: '連鎖区切り `、` 必須'
+  - id: 'SYR040'
+    norms: ['CHN-002']
+    verdict: 'reject'
+    input_note: '`「a.csv」を 読んで、「b」を 加えて、表示する`'
+    expected_note: 'て形中の明示 `を` 禁止'
+  - id: 'SYR041'
+    norms: ['CHN-003']
+    verdict: 'reject'
+    input_note: '`「a.csv」を 読んで、行に分けて`'
+    expected_note: '最終終止形欠落'
+  - id: 'SYR042'
+    norms: ['CHN-004']
+    verdict: 'reject'
+    input_note: '`「a.csv」を 読んで、分岐して\n  もし 真 ならば\n    1\n表示する`'
+    expected_note: '分岐値返却規則違反'
+  - id: 'SYR043'
+    norms: ['CHN-005']
+    verdict: 'reject'
+    input_note: '`分岐して\n  もし 真 ならば\n    1`'
+    expected_note: 'チェイン外 `分岐して` 禁止'
+  - id: 'SYR044'
+    norms: ['RUN-003']
+    verdict: 'reject'
+    input_note: '`処理A しながら 処理B`'
+    expected_note: '未実装予約語使用'
+  - id: 'SYR045'
+    norms: ['CAL-003']
+    verdict: 'reject'
+    input_note: '`移す という 手順【元:を、先:を】\n  返す`'
+    expected_note: '同一助詞重複禁止'
+  - id: 'SYR046'
+    norms: ['SYN-005']
+    verdict: 'reject'
+    input_note: '`公開 公開 足す という 手順【a:を】\n  aを返す`'
+    expected_note: '公開修飾子重複'
+  - id: 'SYR047'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`足す という 手順【a:を】`'
+    expected_note: '手順本体ブロック欠落'
+  - id: 'SYR048'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`人 という 組`'
+    expected_note: '組本体ブロック欠落'
+  - id: 'SYR049'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`表示できる という 特性`'
+    expected_note: '特性本体ブロック欠落'
+  - id: 'SYR050'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`人 は 表示できる を持つ`'
+    expected_note: '特性実装本体欠落'
+  - id: 'SYR051'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`【先頭…、残り】は 【1、2】`'
+    expected_note: '分解パターン不正'
+  - id: 'SYR052'
+    norms: ['LEX-010']
+    verdict: 'reject'
+    input_note: '`待つ という 手順`'
+    expected_note: '予約語を識別子利用'
+  - id: 'SEA001'
+    norms: ['SCP-004']
+    verdict: 'accept'
+    input_note: '親子 1 段で `それのx`'
+    expected_note: '親環境参照成功'
+  - id: 'SEA002'
+    norms: ['SCP-005']
+    verdict: 'accept'
+    input_note: '`あれの設定`（大域あり）'
+    expected_note: '大域参照成功'
+  - id: 'SEA003'
+    norms: ['CAL-001']
+    verdict: 'accept'
+    input_note: '`送る【を,に,で】` 呼出一致'
+    expected_note: '一意解決成功'
+  - id: 'SEA004'
+    norms: ['CAL-004']
+    verdict: 'accept'
+    input_note: 'て形チェイン'
+    expected_note: '暗黙 `を` 補完成功'
+  - id: 'SEA005'
+    norms: ['CAL-006']
+    verdict: 'accept'
+    input_note: 'て形外で全助詞明示'
+    expected_note: '解決成功'
+  - id: 'SEA006'
+    norms: ['CHN-006']
+    verdict: 'accept'
+    input_note: 'チェイン内例外 + `試す`'
+    expected_note: '近傍 `試す` で捕捉'
+  - id: 'SEA007'
+    norms: ['TYP-003']
+    verdict: 'accept'
+    input_note: '`3秒`'
+    expected_note: '型 `数<秒>` 推論'
+  - id: 'SEA008'
+    norms: ['TYP-005']
+    verdict: 'accept'
+    input_note: '`3秒と5秒の和`'
+    expected_note: '`数<秒>`'
+  - id: 'SEA009'
+    norms: ['TYP-006']
+    verdict: 'accept'
+    input_note: '`999999999999999999`'
+    expected_note: '任意精度整数'
+  - id: 'SEA010'
+    norms: ['TYP-007']
+    verdict: 'accept'
+    input_note: '`1を2で割る`'
+    expected_note: '小数 `0.5`'
+  - id: 'SEA011'
+    norms: ['TYP-008']
+    verdict: 'accept'
+    input_note: '`3と1.5の和`'
+    expected_note: '小数昇格'
+  - id: 'SEA012'
+    norms: ['TYP-010']
+    verdict: 'accept'
+    input_note: '`1が1.0と等しい`'
+    expected_note: '真'
+  - id: 'SEA013'
+    norms: ['TYP-011']
+    verdict: 'accept'
+    input_note: '`NaNがNaNと等しくない`'
+    expected_note: '真'
+  - id: 'SEA014'
+    norms: ['CTR-001']
+    verdict: 'accept'
+    input_note: 'if 式を束縛'
+    expected_note: '分岐値が束縛される'
+  - id: 'SEA015'
+    norms: ['CTR-005']
+    verdict: 'accept'
+    input_note: 'ループ式を束縛'
+    expected_note: '`無` が束縛される'
+  - id: 'SEA016'
+    norms: ['EXC-001']
+    verdict: 'accept'
+    input_note: '`試す` 成功'
+    expected_note: '本体値を返す'
+  - id: 'SEA017'
+    norms: ['EXC-003']
+    verdict: 'accept'
+    input_note: '`試す` + `必ず行う`'
+    expected_note: 'finally 値破棄'
+  - id: 'SEA018'
+    norms: ['MOD-003']
+    verdict: 'accept'
+    input_note: '非公開定義の外部参照なし'
+    expected_note: '可視性遵守'
+  - id: 'SEA019'
+    norms: ['MOD-004']
+    verdict: 'accept'
+    input_note: '`公開` 手順の外部参照'
+    expected_note: '可視性成功'
+  - id: 'SEA020'
+    norms: ['RUN-001', 'RUN-002']
+    verdict: 'accept'
+    input_note: '同入力 2 回実行'
+    expected_note: '同一結果'
+  - id: 'SEA021'
+    norms: ['DGN-001']
+    verdict: 'accept'
+    input_note: '任意コンパイルエラー'
+    expected_note: '種別/位置/原因/修正指針を表示'
+  - id: 'SEA022'
+    norms: ['DGN-003']
+    verdict: 'accept'
+    input_note: '助詞不一致エラー'
+    expected_note: '要求助詞/実助詞を併記'
+  - id: 'SEA023'
+    norms: ['DGN-004']
+    verdict: 'accept'
+    input_note: '助数詞不一致エラー'
+    expected_note: '次元名を両辺表示'
+  - id: 'SEA024'
+    norms: ['DGN-005']
+    verdict: 'accept'
+    input_note: '`公開` 適用先不正'
+    expected_note: '許可対象を提示'
+  - id: 'SEA025'
+    norms: ['DGN-006']
+    verdict: 'accept'
+    input_note: '`背景で` 使用'
+    expected_note: '未実装機能エラー'
+  - id: 'SEA026'
+    norms: ['EXC-005']
+    verdict: 'accept'
+    input_note: 'finally で再送出'
+    expected_note: '例外上書き'
+  - id: 'SEA027'
+    norms: ['CAL-002']
+    verdict: 'accept'
+    input_note: '同助詞・異型定義なし'
+    expected_note: '型で解決しない'
+  - id: 'SEA028'
+    norms: ['MOD-002']
+    verdict: 'accept'
+    input_note: '`from use` 複数項目'
+    expected_note: '指定項目のみ導入'
+  - id: 'SEA029'
+    norms: ['SCP-008']
+    verdict: 'accept'
+    input_note: '予約語束縛を拒否'
+    expected_note: '予約語使用禁止'
+  - id: 'SEA030'
+    norms: ['CNF-002']
+    verdict: 'accept'
+    input_note: '規範ID対応表'
+    expected_note: '各IDに受理/拒否ケースあり'
+  - id: 'SER001'
+    norms: ['SCP-004']
+    verdict: 'reject'
+    input_note: '2 段上を `それのx` で参照'
+    expected_note: '親 1 段制約違反'
+  - id: 'SER002'
+    norms: ['SCP-005']
+    verdict: 'reject'
+    input_note: '大域なし `あれの設定`'
+    expected_note: '参照対象なし'
+  - id: 'SER003'
+    norms: ['CAL-001']
+    verdict: 'reject'
+    input_note: '助詞集合不足呼出'
+    expected_note: '助詞不一致'
+  - id: 'SER004'
+    norms: ['CAL-002']
+    verdict: 'reject'
+    input_note: '型のみで候補選択'
+    expected_note: '型解決禁止'
+  - id: 'SER005'
+    norms: ['CAL-004']
+    verdict: 'reject'
+    input_note: 'て形外暗黙補完'
+    expected_note: '省略規則違反'
+  - id: 'SER006'
+    norms: ['CAL-005']
+    verdict: 'reject'
+    input_note: '暗黙 `が` でメソッド解決'
+    expected_note: '禁止規則違反'
+  - id: 'SER007'
+    norms: ['CAL-006']
+    verdict: 'reject'
+    input_note: '必須助詞引数省略'
+    expected_note: '引数不足'
+  - id: 'SER008'
+    norms: ['CHN-006']
+    verdict: 'reject'
+    input_note: 'チェイン例外を握り潰す'
+    expected_note: '伝搬規則違反'
+  - id: 'SER009'
+    norms: ['TYP-002']
+    verdict: 'reject'
+    input_note: '型推論不能式を許可'
+    expected_note: '推論不能エラー欠落'
+  - id: 'SER010'
+    norms: ['TYP-004']
+    verdict: 'reject'
+    input_note: '`3秒と5回の和` を許可'
+    expected_note: '次元不一致'
+  - id: 'SER011'
+    norms: ['TYP-007']
+    verdict: 'reject'
+    input_note: '`1/2` を整数 0 扱い'
+    expected_note: '除算規則違反'
+  - id: 'SER012'
+    norms: ['TYP-008']
+    verdict: 'reject'
+    input_note: '混合演算で整数維持'
+    expected_note: '昇格規則違反'
+  - id: 'SER013'
+    norms: ['TYP-009']
+    verdict: 'reject'
+    input_note: '`1/0` を NaN 扱い'
+    expected_note: '整数除算ゼロ規則違反'
+  - id: 'SER014'
+    norms: ['TYP-010']
+    verdict: 'reject'
+    input_note: '`1 == 1.0` を偽'
+    expected_note: '比較規則違反'
+  - id: 'SER015'
+    norms: ['CTR-001']
+    verdict: 'reject'
+    input_note: 'if を文専用扱い'
+    expected_note: '式モデル違反'
+  - id: 'SER016'
+    norms: ['CTR-005']
+    verdict: 'reject'
+    input_note: 'ループが末尾値返却'
+    expected_note: 'ループ値規則違反'
+  - id: 'SER017'
+    norms: ['EXC-002']
+    verdict: 'reject'
+    input_note: 'catch なし例外で未定義'
+    expected_note: '`無` 規則違反'
+  - id: 'SER018'
+    norms: ['EXC-003']
+    verdict: 'reject'
+    input_note: 'finally 値を試す値に反映'
+    expected_note: 'finally 値破棄違反'
+  - id: 'SER019'
+    norms: ['EXC-005']
+    verdict: 'reject'
+    input_note: 'finally 再送出時に元例外維持'
+    expected_note: '上書き規則違反'
+  - id: 'SER020'
+    norms: ['MOD-003']
+    verdict: 'reject'
+    input_note: '非公開定義を外部公開'
+    expected_note: '可視性違反'
+  - id: 'SER021'
+    norms: ['MOD-004']
+    verdict: 'reject'
+    input_note: '`公開` なしで外部参照成功'
+    expected_note: '公開規則違反'
+  - id: 'SER022'
+    norms: ['MOD-005']
+    verdict: 'reject'
+    input_note: '`公開` を束縛文に適用許可'
+    expected_note: '適用先違反'
+  - id: 'SER023'
+    norms: ['RUN-001']
+    verdict: 'reject'
+    input_note: '実行順序が非決定'
+    expected_note: '決定性違反'
+  - id: 'SER024'
+    norms: ['RUN-003']
+    verdict: 'reject'
+    input_note: '`待つ` を通常実行'
+    expected_note: '未実装規則違反'
+  - id: 'SER025'
+    norms: ['DGN-001']
+    verdict: 'reject'
+    input_note: '位置情報なし診断'
+    expected_note: '診断要件違反'
+  - id: 'SER026'
+    norms: ['DGN-002']
+    verdict: 'reject'
+    input_note: '`これ` 単独で別文言'
+    expected_note: '単独禁止診断違反'
+  - id: 'SER027'
+    norms: ['DGN-003']
+    verdict: 'reject'
+    input_note: '助詞不一致で集合非表示'
+    expected_note: '診断不足'
+  - id: 'SER028'
+    norms: ['DGN-004']
+    verdict: 'reject'
+    input_note: '次元不一致で次元名なし'
+    expected_note: '診断不足'
+  - id: 'SER029'
+    norms: ['DGN-006']
+    verdict: 'reject'
+    input_note: '`背景で` に汎用構文エラー'
+    expected_note: '未実装明示欠落'
+  - id: 'SER030'
+    norms: ['CNF-001']
+    verdict: 'reject'
+    input_note: '規範無視の独自拡張'
+    expected_note: '適合不成立'

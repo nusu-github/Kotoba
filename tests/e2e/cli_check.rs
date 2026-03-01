@@ -13,5 +13,9 @@ fn cli_check_ok() {
         .output()
         .expect("run cli");
 
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

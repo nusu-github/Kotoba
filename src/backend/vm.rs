@@ -205,7 +205,7 @@ impl VM {
                         _ => {
                             return Err(RuntimeError {
                                 message: format!("{}は符号反転できません", a.type_name()),
-                            })
+                            });
                         }
                     };
                     self.stack.push(result);

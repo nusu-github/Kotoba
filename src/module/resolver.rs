@@ -1,6 +1,11 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use indexmap::IndexMap;
+use petgraph::algo::{kosaraju_scc, toposort};
+use petgraph::graph::{DiGraph, NodeIndex};
+use tracing::{debug, instrument};
+
 use crate::common::source::SourceFile;
 use crate::diag::report::{Diagnostic, DiagnosticKind};
 use crate::frontend::ast::{Program, Stmt, StmtKind};
@@ -37,11 +42,10 @@ struct ImportPolicy {
 #[derive(Debug)]
 struct GraphBuilder {
     modules: HashMap<PathBuf, ParsedModule>,
-    order: Vec<PathBuf>,
-    temp_stack: Vec<PathBuf>,
-    temp_set: HashSet<PathBuf>,
-    done: HashSet<PathBuf>,
     policies: HashMap<PathBuf, ImportPolicy>,
+    graph: DiGraph<PathBuf, ()>,
+    nodes: IndexMap<PathBuf, NodeIndex>,
+    loading: HashSet<PathBuf>,
     diagnostics: Vec<ModuleDiagnostic>,
 }
 
@@ -49,46 +53,38 @@ impl GraphBuilder {
     fn new() -> Self {
         Self {
             modules: HashMap::new(),
-            order: Vec::new(),
-            temp_stack: Vec::new(),
-            temp_set: HashSet::new(),
-            done: HashSet::new(),
             policies: HashMap::new(),
+            graph: DiGraph::new(),
+            nodes: IndexMap::new(),
+            loading: HashSet::new(),
             diagnostics: Vec::new(),
         }
     }
 
+    fn ensure_node(&mut self, path: &PathBuf) -> NodeIndex {
+        if let Some(idx) = self.nodes.get(path) {
+            return *idx;
+        }
+        let idx = self.graph.add_node(path.clone());
+        self.nodes.insert(path.clone(), idx);
+        idx
+    }
+
+    fn add_dep_edge(&mut self, dependency: &PathBuf, importer: &PathBuf) {
+        let dep_idx = self.ensure_node(dependency);
+        let importer_idx = self.ensure_node(importer);
+        if self.graph.find_edge(dep_idx, importer_idx).is_none() {
+            self.graph.add_edge(dep_idx, importer_idx, ());
+        }
+    }
+
     fn visit(&mut self, path: PathBuf) {
-        if self.done.contains(&path) {
+        if self.modules.contains_key(&path) || self.loading.contains(&path) {
             return;
         }
 
-        if self.temp_set.contains(&path) {
-            let mut cycle = Vec::new();
-            if let Some(idx) = self.temp_stack.iter().position(|p| p == &path) {
-                cycle.extend(self.temp_stack[idx..].iter().cloned());
-                cycle.push(path.clone());
-            }
-            self.diagnostics.push(ModuleDiagnostic {
-                diagnostic: Diagnostic::new(
-                    DiagnosticKind::Compile,
-                    format!(
-                        "モジュール循環参照を検出しました: {}",
-                        cycle
-                            .iter()
-                            .map(|p| p.display().to_string())
-                            .collect::<Vec<_>>()
-                            .join(" -> ")
-                    ),
-                )
-                .with_hint("`使う` の依存関係を非循環（DAG）にしてください"),
-                source: None,
-            });
-            return;
-        }
-
-        self.temp_set.insert(path.clone());
-        self.temp_stack.push(path.clone());
+        self.ensure_node(&path);
+        self.loading.insert(path.clone());
 
         let source = match load_source(&path) {
             Ok(src) => src,
@@ -101,8 +97,7 @@ impl GraphBuilder {
                     .with_hint(format!("パス: {}", path.display())),
                     source: None,
                 });
-                self.temp_set.remove(&path);
-                self.temp_stack.pop();
+                self.loading.remove(&path);
                 return;
             }
         };
@@ -117,8 +112,7 @@ impl GraphBuilder {
                     source: Some(source.clone()),
                 });
             }
-            self.temp_set.remove(&path);
-            self.temp_stack.pop();
+            self.loading.remove(&path);
             return;
         }
 
@@ -132,8 +126,7 @@ impl GraphBuilder {
                     source: Some(source.clone()),
                 });
             }
-            self.temp_set.remove(&path);
-            self.temp_stack.pop();
+            self.loading.remove(&path);
             return;
         }
 
@@ -166,13 +159,12 @@ impl GraphBuilder {
             } else {
                 policy.full = true;
             }
+
+            self.add_dep_edge(&dep, &path);
             self.visit(dep);
         }
 
-        self.temp_set.remove(&path);
-        self.temp_stack.pop();
-        self.done.insert(path.clone());
-        self.order.push(path);
+        self.loading.remove(&path);
     }
 }
 
@@ -182,6 +174,7 @@ struct UseStmt {
     items: Option<Vec<String>>,
 }
 
+#[instrument(skip_all, fields(root = %root.display()))]
 pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDiagnostic>> {
     let root_path = canonical_like(root.to_path_buf());
 
@@ -190,6 +183,48 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
 
     if !builder.diagnostics.is_empty() {
         return Err(builder.diagnostics);
+    }
+
+    let mut cycle_diags = Vec::new();
+    for component in kosaraju_scc(&builder.graph) {
+        let is_cycle = if component.len() > 1 {
+            true
+        } else {
+            let node = component[0];
+            builder.graph.find_edge(node, node).is_some()
+        };
+
+        if !is_cycle {
+            continue;
+        }
+
+        let cycle_nodes = recover_cycle_path(&builder.graph, &component).unwrap_or_else(|| {
+            let mut fallback = component.clone();
+            if let Some(first) = component.first() {
+                fallback.push(*first);
+            }
+            fallback
+        });
+
+        let cycle_str = cycle_nodes
+            .iter()
+            .filter_map(|idx| builder.graph.node_weight(*idx))
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" -> ");
+
+        cycle_diags.push(ModuleDiagnostic {
+            diagnostic: Diagnostic::new(
+                DiagnosticKind::Compile,
+                format!("モジュール循環参照を検出しました: {cycle_str}"),
+            )
+            .with_hint("`使う` の依存関係を非循環（DAG）にしてください"),
+            source: None,
+        });
+    }
+
+    if !cycle_diags.is_empty() {
+        return Err(cycle_diags);
     }
 
     let root_module = match builder.modules.get(&root_path) {
@@ -205,10 +240,37 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
         }
     };
 
+    let ordered_nodes = match toposort(&builder.graph, None) {
+        Ok(nodes) => nodes,
+        Err(err) => {
+            let node = builder
+                .graph
+                .node_weight(err.node_id())
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<unknown>".to_string());
+            return Err(vec![ModuleDiagnostic {
+                diagnostic: Diagnostic::new(
+                    DiagnosticKind::Compile,
+                    format!("依存順序の確定に失敗しました: {node}"),
+                )
+                .with_hint("依存関係グラフを確認してください"),
+                source: None,
+            }]);
+        }
+    };
+
+    debug!(
+        module_count = builder.modules.len(),
+        "module graph resolved"
+    );
+
     let mut merged = Vec::new();
 
-    // 依存モジュールの公開定義を先に導入。
-    for module_path in &builder.order {
+    // dependency -> importer の向きで edge を張っているため、toposort 順で依存が先に来る。
+    for node in ordered_nodes {
+        let Some(module_path) = builder.graph.node_weight(node) else {
+            continue;
+        };
         if module_path == &root_path {
             continue;
         }
@@ -272,6 +334,52 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
         root_source: root_module.source,
         program: merged_program,
     })
+}
+
+fn recover_cycle_path(
+    graph: &DiGraph<PathBuf, ()>,
+    component: &[NodeIndex],
+) -> Option<Vec<NodeIndex>> {
+    let allowed: HashSet<NodeIndex> = component.iter().copied().collect();
+
+    for &start in component {
+        let mut path = Vec::new();
+        let mut on_stack = HashSet::new();
+        if dfs_cycle(graph, &allowed, start, start, &mut path, &mut on_stack) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+fn dfs_cycle(
+    graph: &DiGraph<PathBuf, ()>,
+    allowed: &HashSet<NodeIndex>,
+    start: NodeIndex,
+    current: NodeIndex,
+    path: &mut Vec<NodeIndex>,
+    on_stack: &mut HashSet<NodeIndex>,
+) -> bool {
+    path.push(current);
+    on_stack.insert(current);
+
+    for next in graph.neighbors(current) {
+        if !allowed.contains(&next) {
+            continue;
+        }
+        if next == start && path.len() > 1 {
+            path.push(start);
+            return true;
+        }
+        if !on_stack.contains(&next) && dfs_cycle(graph, allowed, start, next, path, on_stack) {
+            return true;
+        }
+    }
+
+    on_stack.remove(&current);
+    path.pop();
+    false
 }
 
 fn collect_use_statements(program: &Program) -> Vec<UseStmt> {

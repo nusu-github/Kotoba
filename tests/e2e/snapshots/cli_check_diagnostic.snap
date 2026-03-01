@@ -1,0 +1,14 @@
+---
+source: tests/e2e/cli_diag_snapshot.rs
+expression: stderr
+---
+kotoba::parse
+
+  × Parse: 文の区切りが必要です（「。」「改行」または適切な助詞を入れてくださ
+  │ い）
+   ╭─[/home/nusu/Kotoba/<INPUT>:1:8]
+ 1 │ 名前 「太郎」
+   ·      ────┬───
+   ·          ╰── 文の区切りが必要です（「。」「改行」または適切な助詞を入れてください）
+   ╰────
+  help: モジュール: /home/nusu/Kotoba/<INPUT>

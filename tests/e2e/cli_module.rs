@@ -20,8 +20,11 @@ fn cli_run_with_use_module() {
     let main_path = format!("{dir}/main.kb");
     let util_path = format!("{dir}/util.kb");
 
-    fs::write(&util_path, "公開 足す という 手順【a:を、b:に】\n  aとbの和を 返す\n")
-        .expect("write util");
+    fs::write(
+        &util_path,
+        "公開 足す という 手順【a:を、b:に】\n  aとbの和を 返す\n",
+    )
+    .expect("write util");
     fs::write(
         &main_path,
         "「util」を 使う\n結果 は 2を 3に 足す\n結果と 表示する\n",
@@ -34,6 +37,10 @@ fn cli_run_with_use_module() {
         .output()
         .expect("run cli");
 
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains('5'));
 }

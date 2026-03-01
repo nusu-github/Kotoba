@@ -1,6 +1,6 @@
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
-use kotoba::sema::infer::analyze;
+use kotoba::sema::infer::{analyze, analyze_with_limit};
 
 #[test]
 fn sema_rejects_standalone_kosoado() {
@@ -101,4 +101,94 @@ fn sema_rejects_break_outside_loop() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(joined.contains("抜ける"), "diags={joined}");
+}
+
+#[test]
+fn sema_stops_when_step_limit_exceeded() {
+    let src = r#"
+値 は 1
+もし 真 ならば
+  値 は 値と1の和
+そうでなければ
+  値 は 値と2の和
+"#;
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty());
+
+    let diags = analyze_with_limit(&program, 1);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("解析回数が上限を超えた"), "diags={joined}");
+}
+
+#[test]
+fn sema_rejects_incomplete_rebind_call() {
+    let src = "数を 1 変える";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("変える"), "diags={joined}");
+}
+
+#[test]
+fn sema_rejects_kou_outside_proc() {
+    let (tokens, lex_errs) = Lexer::new("こう").tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("こう"), "diags={joined}");
+}
+
+#[test]
+fn sema_allows_kou_inside_proc() {
+    let src = "階乗 という 手順\n  こう";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let diags = analyze(&program);
+    assert!(
+        diags.is_empty(),
+        "unexpected diagnostics: {}",
+        diags
+            .iter()
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+#[test]
+fn sema_rejects_kore_inside_te_chain_branch() {
+    let src = "「a.csv」を 読んで、分岐して\n  もし 真 ならば\n    これを 返す\n  そうでなければ\n    「ok」を 返す\n表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-002"), "diags={joined}");
 }

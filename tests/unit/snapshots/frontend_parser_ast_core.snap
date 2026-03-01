@@ -1,0 +1,108 @@
+---
+source: tests/unit/frontend_snapshot.rs
+expression: "normalize_newline(&format!(\"{program:#?}\"))"
+---
+Program {
+    statements: [
+        Stmt {
+            kind: ProcDef {
+                name: "足す",
+                params: [
+                    Param {
+                        name: Some(
+                            "a",
+                        ),
+                        particle: Wo,
+                        span: Span {
+                            start: 26,
+                            end: 31,
+                        },
+                    },
+                    Param {
+                        name: Some(
+                            "b",
+                        ),
+                        particle: Wo,
+                        span: Span {
+                            start: 34,
+                            end: 39,
+                        },
+                    },
+                ],
+                body: Block {
+                    statements: [
+                        Stmt {
+                            kind: Bind {
+                                name: "合計",
+                                mutable: false,
+                                value: Expr {
+                                    kind: BinaryOp {
+                                        op: Add,
+                                        left: Expr {
+                                            kind: Identifier(
+                                                "a",
+                                            ),
+                                            span: Span {
+                                                start: 56,
+                                                end: 57,
+                                            },
+                                        },
+                                        right: Expr {
+                                            kind: Identifier(
+                                                "b",
+                                            ),
+                                            span: Span {
+                                                start: 60,
+                                                end: 61,
+                                            },
+                                        },
+                                    },
+                                    span: Span {
+                                        start: 56,
+                                        end: 67,
+                                    },
+                                },
+                            },
+                            span: Span {
+                                start: 45,
+                                end: 67,
+                            },
+                        },
+                        Stmt {
+                            kind: Return(
+                                Some(
+                                    Expr {
+                                        kind: Identifier(
+                                            "合計",
+                                        ),
+                                        span: Span {
+                                            start: 70,
+                                            end: 76,
+                                        },
+                                    },
+                                ),
+                            ),
+                            span: Span {
+                                start: 70,
+                                end: 86,
+                            },
+                        },
+                    ],
+                    span: Span {
+                        start: 43,
+                        end: 87,
+                    },
+                },
+                is_public: false,
+            },
+            span: Span {
+                start: 0,
+                end: 87,
+            },
+        },
+    ],
+    span: Span {
+        start: 0,
+        end: 87,
+    },
+}
