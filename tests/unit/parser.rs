@@ -54,3 +54,48 @@ fn parser_accepts_try_as_expression_in_binding() {
     let (_program, parse_errs) = Parser::new(tokens).parse();
     assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
 }
+
+#[test]
+fn parser_reports_dgn_005_for_invalid_public_target() {
+    let src = "公開 名前は「太郎」";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty());
+    let joined = parse_errs
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-005"), "parse_errs={joined}");
+}
+
+#[test]
+fn parser_reports_dgn_006_for_reserved_future_keyword() {
+    let src = "しながら";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty());
+    let joined = parse_errs
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-006"), "parse_errs={joined}");
+}
+
+#[test]
+fn parser_accepts_proc_with_if_body() {
+    let src = r#"
+減らす という 手順【n:を】
+  もし nが0と等しい ならば
+    0
+  そうでなければ
+    1
+"#;
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}

@@ -311,7 +311,10 @@ impl Compiler {
                     KosoAdoKind::Kore => "__これ",
                     KosoAdoKind::Sore => "__それ",
                     KosoAdoKind::Are => "__あれ",
-                    KosoAdoKind::Kou => "__こう",
+                    KosoAdoKind::Kou => {
+                        self.emit(OpCode::LoadCurrentProc);
+                        return;
+                    }
                     KosoAdoKind::Koko => "__ここ",
                     KosoAdoKind::Soko => "__そこ",
                 };
@@ -529,7 +532,9 @@ impl Compiler {
 
         // 一般的な手順呼び出し
         // 呼び出し先をロード
-        if let Some(idx) = self.resolve_local(callee) {
+        if callee == "こう" {
+            self.emit(OpCode::LoadCurrentProc);
+        } else if let Some(idx) = self.resolve_local(callee) {
             self.emit(OpCode::LoadLocal(idx));
         } else {
             self.emit(OpCode::LoadGlobal(callee.to_string()));

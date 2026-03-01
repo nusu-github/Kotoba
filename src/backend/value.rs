@@ -126,6 +126,8 @@ pub enum OpCode {
 
     /// ローカル変数を読み込む
     LoadLocal(usize),
+    /// 現在実行中の手順を読み込む
+    LoadCurrentProc,
     /// ローカル変数に書き込む
     StoreLocal(usize),
     /// グローバル変数を読み込む

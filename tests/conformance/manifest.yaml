@@ -60,6 +60,12 @@ cases:
     input: |
       抜ける
 
+  - id: CHECK-REJECT-009
+    mode: check
+    expect: reject
+    input: |
+      公開 名前は「太郎」
+
   - id: RUN-ACCEPT-001
     mode: run
     expect: accept

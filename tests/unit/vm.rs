@@ -60,3 +60,19 @@ fn vm_try_finally_rethrow_overrides_original() {
     let msg = err.to_string();
     assert!(msg.contains("後の例外"), "msg={msg}");
 }
+
+#[test]
+fn vm_supports_kou_recursive_call() {
+    let src = r#"
+減らす という 手順【n:を】
+  もし nが0と等しい ならば
+    0を 返す
+  そうでなければ
+    次 は nと1の差
+    次を こう 返す
+結果 は 3を 減らす
+結果と 表示する
+"#;
+    let vm = run_src(src).expect("run");
+    assert_eq!(vm.output, vec!["0"]);
+}

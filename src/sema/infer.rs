@@ -164,7 +164,7 @@ impl Analyzer {
                         Diagnostic::new(
                             DiagnosticKind::Sema,
                             format!(
-                                "{} は単独では使えません。{}の識別子 を使用してください",
+                                "DGN-002: {} は単独では使えません。{}の識別子を使用してください",
                                 name, name
                             ),
                         )

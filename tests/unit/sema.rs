@@ -9,7 +9,16 @@ fn sema_rejects_standalone_kosoado() {
     let (program, parse_errs) = Parser::new(tokens).parse();
     assert!(parse_errs.is_empty());
     let diags = analyze(&program);
-    assert!(!diags.is_empty());
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-002"), "diags={joined}");
+    assert!(
+        joined.contains("これ は単独では使えません。これの識別子を使用してください"),
+        "diags={joined}"
+    );
 }
 
 #[test]

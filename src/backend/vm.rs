@@ -121,6 +121,18 @@ impl VM {
                     self.stack.push(value);
                 }
 
+                OpCode::LoadCurrentProc => {
+                    let frame = self.frames.last().ok_or_else(|| RuntimeError {
+                        message: "フレームスタックが空です".into(),
+                    })?;
+                    let chunk = &self.chunks[frame.chunk_id];
+                    self.stack.push(Value::Procedure(crate::bytecode::ProcRef {
+                        name: chunk.name.clone(),
+                        chunk_id: frame.chunk_id,
+                        arity: chunk.arity,
+                    }));
+                }
+
                 OpCode::StoreLocal(idx) => {
                     let value = self.stack.last().cloned().unwrap_or(Value::None);
                     let slot = base + idx;

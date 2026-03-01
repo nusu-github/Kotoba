@@ -171,7 +171,7 @@ impl Parser {
                     }
                     _ => {
                         return Err(ParseError {
-                            message: "「公開」は手順定義、組定義、特性定義にのみ使えます".into(),
+                            message: "DGN-005: 「公開」は手順・組・特性にのみ適用できます".into(),
                             span: start,
                         });
                     }
@@ -239,7 +239,7 @@ impl Parser {
 
             // 予約済み（未実装）
             TokenKind::Shinagara | TokenKind::Matsu | TokenKind::Haikeide => Err(ParseError {
-                message: "未実装機能です（しながら/待つ/背景で）".into(),
+                message: "DGN-006: 未実装機能です（しながら/待つ/背景で）".into(),
                 span: start,
             }),
 
@@ -946,6 +946,26 @@ impl Parser {
         self.eat(&TokenKind::Particle(Particle::Ga))?;
         let right = self.parse_comparison_operand()?;
         let (op, end_span) = match self.current_kind().clone() {
+            TokenKind::Identifier(w) if w == "より大きい" => {
+                let s = self.current_span();
+                self.advance();
+                (CompOp::Gt, s)
+            }
+            TokenKind::Identifier(w) if w == "より小さい" => {
+                let s = self.current_span();
+                self.advance();
+                (CompOp::Lt, s)
+            }
+            TokenKind::Identifier(w) if w == "と等しい" => {
+                let s = self.current_span();
+                self.advance();
+                (CompOp::Eq, s)
+            }
+            TokenKind::Identifier(w) if w == "と等しくない" => {
+                let s = self.current_span();
+                self.advance();
+                (CompOp::Ne, s)
+            }
             TokenKind::Particle(Particle::Yori) => {
                 self.advance();
                 match self.current_kind().clone() {
@@ -1213,6 +1233,7 @@ impl Parser {
                 | TokenKind::Tsukau
                 | TokenKind::Tsukuru
                 | TokenKind::Uttaeru
+                | TokenKind::Kou
         ) && !matches!(
             self.peek_ahead(1),
             TokenKind::Particle(_) | TokenKind::AccessParticle
@@ -1250,8 +1271,12 @@ impl Parser {
                 self.advance();
                 Ok("訴える".into())
             }
+            TokenKind::Kou => {
+                self.advance();
+                Ok("こう".into())
+            }
             TokenKind::Shinagara | TokenKind::Matsu | TokenKind::Haikeide => Err(ParseError {
-                message: "未実装機能です（しながら/待つ/背景で）".into(),
+                message: "DGN-006: 未実装機能です（しながら/待つ/背景で）".into(),
                 span: self.current_span(),
             }),
             _ => Err(ParseError {
