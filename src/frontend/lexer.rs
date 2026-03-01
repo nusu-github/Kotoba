@@ -140,8 +140,10 @@ impl<'src> Lexer<'src> {
                         message: msg.clone(),
                         span: Span::new(start, self.pos),
                     });
-                    self.tokens
-                        .push(Token::new(TokenKind::Error(msg), Span::new(start, self.pos)));
+                    self.tokens.push(Token::new(
+                        TokenKind::Error(msg),
+                        Span::new(start, self.pos),
+                    ));
                 }
             }
         }
@@ -488,7 +490,8 @@ impl<'src> Lexer<'src> {
 
         // アクセス助詞「の」の単体判定
         if word == "の" {
-            self.tokens.push(Token::new(TokenKind::AccessParticle, span));
+            self.tokens
+                .push(Token::new(TokenKind::AccessParticle, span));
             return;
         }
 
@@ -519,8 +522,10 @@ impl<'src> Lexer<'src> {
             // 「の」→ AccessParticle
             let no_start = start + no_byte_pos;
             let no_end = no_start + "の".len();
-            self.tokens
-                .push(Token::new(TokenKind::AccessParticle, Span::new(no_start, no_end)));
+            self.tokens.push(Token::new(
+                TokenKind::AccessParticle,
+                Span::new(no_start, no_end),
+            ));
 
             // 「の」の後の部分を処理
             let after = &word[no_byte_pos + "の".len()..];
@@ -540,19 +545,26 @@ impl<'src> Lexer<'src> {
 
         // キーワード判定
         if let Some(kind) = keyword_from_str(word) {
-            self.tokens.push(Token::new(kind, Span::new(byte_offset, word_end)));
+            self.tokens
+                .push(Token::new(kind, Span::new(byte_offset, word_end)));
             return;
         }
 
         // 助詞単体判定
         if let Some(p) = standalone_particle(word) {
-            self.tokens.push(Token::new(TokenKind::Particle(p), Span::new(byte_offset, word_end)));
+            self.tokens.push(Token::new(
+                TokenKind::Particle(p),
+                Span::new(byte_offset, word_end),
+            ));
             return;
         }
 
         // 「の」単体
         if word == "の" {
-            self.tokens.push(Token::new(TokenKind::AccessParticle, Span::new(byte_offset, word_end)));
+            self.tokens.push(Token::new(
+                TokenKind::AccessParticle,
+                Span::new(byte_offset, word_end),
+            ));
             return;
         }
 
@@ -598,8 +610,10 @@ impl<'src> Lexer<'src> {
         }
 
         // 通常の識別子
-        self.tokens
-            .push(Token::new(TokenKind::Identifier(word.to_string()), Span::new(byte_offset, word_end)));
+        self.tokens.push(Token::new(
+            TokenKind::Identifier(word.to_string()),
+            Span::new(byte_offset, word_end),
+        ));
     }
 
     fn starts_with(&self, s: &str) -> bool {

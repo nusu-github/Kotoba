@@ -131,11 +131,7 @@ impl VM {
                 }
 
                 OpCode::LoadGlobal(name) => {
-                    let value = self
-                        .globals
-                        .get(&name)
-                        .cloned()
-                        .unwrap_or(Value::None);
+                    let value = self.globals.get(&name).cloned().unwrap_or(Value::None);
                     self.stack.push(value);
                 }
 
@@ -251,15 +247,13 @@ impl VM {
                 OpCode::And => {
                     let b = self.pop_value()?;
                     let a = self.pop_value()?;
-                    self.stack
-                        .push(Value::Bool(a.is_truthy() && b.is_truthy()));
+                    self.stack.push(Value::Bool(a.is_truthy() && b.is_truthy()));
                 }
 
                 OpCode::Or => {
                     let b = self.pop_value()?;
                     let a = self.pop_value()?;
-                    self.stack
-                        .push(Value::Bool(a.is_truthy() || b.is_truthy()));
+                    self.stack.push(Value::Bool(a.is_truthy() || b.is_truthy()));
                 }
 
                 // === ジャンプ ===
@@ -307,8 +301,7 @@ impl VM {
                             let new_base = callee_idx + 1; // 引数の開始位置
 
                             // ローカル変数用のスロットを確保
-                            let local_count =
-                                self.chunks[proc_ref.chunk_id].local_count;
+                            let local_count = self.chunks[proc_ref.chunk_id].local_count;
                             let needed = new_base + local_count;
                             while self.stack.len() < needed {
                                 self.stack.push(Value::None);
@@ -413,8 +406,7 @@ impl VM {
                         }
                         Value::List(list) => match prop.as_str() {
                             "長さ" => {
-                                self.stack
-                                    .push(Value::Integer(BigInt::from(list.len())));
+                                self.stack.push(Value::Integer(BigInt::from(list.len())));
                             }
                             _ => {
                                 self.stack.push(Value::None);
@@ -448,8 +440,7 @@ impl VM {
                 OpCode::Concat(count) => {
                     let start = self.stack.len() - count;
                     let parts: Vec<Value> = self.stack.drain(start..).collect();
-                    let result: String =
-                        parts.iter().map(|v| v.to_display_string()).collect();
+                    let result: String = parts.iter().map(|v| v.to_display_string()).collect();
                     self.stack.push(Value::String(result));
                 }
 
@@ -538,21 +529,11 @@ impl VM {
         match (a, b) {
             (Value::Integer(x), Value::Integer(y)) => Ok(Value::Integer(x + y)),
             (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x + y)),
-            (Value::Integer(x), Value::Float(y)) => {
-                Ok(Value::Float(x.to_f64().unwrap_or(0.0) + y))
-            }
-            (Value::Float(x), Value::Integer(y)) => {
-                Ok(Value::Float(x + y.to_f64().unwrap_or(0.0)))
-            }
-            (Value::String(x), Value::String(y)) => {
-                Ok(Value::String(format!("{}{}", x, y)))
-            }
+            (Value::Integer(x), Value::Float(y)) => Ok(Value::Float(x.to_f64().unwrap_or(0.0) + y)),
+            (Value::Float(x), Value::Integer(y)) => Ok(Value::Float(x + y.to_f64().unwrap_or(0.0))),
+            (Value::String(x), Value::String(y)) => Ok(Value::String(format!("{}{}", x, y))),
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}と{}の和は計算できません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}と{}の和は計算できません", a.type_name(), b.type_name()),
             }),
         }
     }
@@ -561,18 +542,10 @@ impl VM {
         match (a, b) {
             (Value::Integer(x), Value::Integer(y)) => Ok(Value::Integer(x - y)),
             (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x - y)),
-            (Value::Integer(x), Value::Float(y)) => {
-                Ok(Value::Float(x.to_f64().unwrap_or(0.0) - y))
-            }
-            (Value::Float(x), Value::Integer(y)) => {
-                Ok(Value::Float(x - y.to_f64().unwrap_or(0.0)))
-            }
+            (Value::Integer(x), Value::Float(y)) => Ok(Value::Float(x.to_f64().unwrap_or(0.0) - y)),
+            (Value::Float(x), Value::Integer(y)) => Ok(Value::Float(x - y.to_f64().unwrap_or(0.0))),
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}と{}の差は計算できません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}と{}の差は計算できません", a.type_name(), b.type_name()),
             }),
         }
     }
@@ -581,18 +554,10 @@ impl VM {
         match (a, b) {
             (Value::Integer(x), Value::Integer(y)) => Ok(Value::Integer(x * y)),
             (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x * y)),
-            (Value::Integer(x), Value::Float(y)) => {
-                Ok(Value::Float(x.to_f64().unwrap_or(0.0) * y))
-            }
-            (Value::Float(x), Value::Integer(y)) => {
-                Ok(Value::Float(x * y.to_f64().unwrap_or(0.0)))
-            }
+            (Value::Integer(x), Value::Float(y)) => Ok(Value::Float(x.to_f64().unwrap_or(0.0) * y)),
+            (Value::Float(x), Value::Integer(y)) => Ok(Value::Float(x * y.to_f64().unwrap_or(0.0))),
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}と{}の積は計算できません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}と{}の積は計算できません", a.type_name(), b.type_name()),
             }),
         }
     }
@@ -632,11 +597,7 @@ impl VM {
                 Ok(Value::Float(x / y.to_f64().unwrap_or(1.0)))
             }
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}を{}で割ることはできません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}を{}で割ることはできません", a.type_name(), b.type_name()),
             }),
         }
     }
@@ -652,11 +613,7 @@ impl VM {
                 Ok(Value::Integer(x % y))
             }
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}と{}の余りは計算できません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}と{}の余りは計算できません", a.type_name(), b.type_name()),
             }),
         }
     }
@@ -671,11 +628,7 @@ impl VM {
             (Value::Float(x), Value::Integer(y)) => Ok(*x > y.to_f64().unwrap_or(0.0)),
             (Value::String(x), Value::String(y)) => Ok(x > y),
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}と{}は比較できません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}と{}は比較できません", a.type_name(), b.type_name()),
             }),
         }
     }
@@ -688,13 +641,8 @@ impl VM {
             (Value::Float(x), Value::Integer(y)) => Ok(*x < y.to_f64().unwrap_or(0.0)),
             (Value::String(x), Value::String(y)) => Ok(x < y),
             _ => Err(RuntimeError {
-                message: format!(
-                    "{}と{}は比較できません",
-                    a.type_name(),
-                    b.type_name()
-                ),
+                message: format!("{}と{}は比較できません", a.type_name(), b.type_name()),
             }),
         }
     }
 }
-

@@ -9,7 +9,10 @@ pub fn load_source(path: &Path) -> std::io::Result<SourceFile> {
 }
 
 pub fn normalize_module_path(base_file: &Path, module_name: &str) -> PathBuf {
-    let mut p = base_file.parent().unwrap_or_else(|| Path::new(".")).join(module_name);
+    let mut p = base_file
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(module_name);
     if p.extension().is_none() {
         p.set_extension("kb");
     }

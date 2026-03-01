@@ -103,7 +103,11 @@ impl Parser {
             Ok(self.advance().clone())
         } else {
             Err(ParseError {
-                message: format!("「{:?}」が必要ですが、「{}」がありました", expected, self.current_kind()),
+                message: format!(
+                    "「{:?}」が必要ですが、「{}」がありました",
+                    expected,
+                    self.current_kind()
+                ),
                 span: self.current_span(),
             })
         }
@@ -117,7 +121,10 @@ impl Parser {
                 Ok((name, span))
             }
             _ => Err(ParseError {
-                message: format!("識別子が必要ですが、「{}」がありました", self.current_kind()),
+                message: format!(
+                    "識別子が必要ですが、「{}」がありました",
+                    self.current_kind()
+                ),
                 span: self.current_span(),
             }),
         }
@@ -222,7 +229,13 @@ impl Parser {
             TokenKind::Moshi => self.parse_if_statement(start),
 
             // 試す
-            TokenKind::Tamesu => self.parse_try(start),
+            TokenKind::Tamesu => {
+                let expr = self.parse_try_expr(start)?;
+                Ok(Stmt {
+                    span: expr.span,
+                    kind: StmtKind::ExprStmt(expr),
+                })
+            }
 
             // 予約済み（未実装）
             TokenKind::Shinagara | TokenKind::Matsu | TokenKind::Haikeide => Err(ParseError {
@@ -324,10 +337,7 @@ impl Parser {
         })
     }
 
-    fn try_convert_use_statement(
-        &self,
-        expr: &Expr,
-    ) -> Result<Option<StmtKind>, ParseError> {
+    fn try_convert_use_statement(&self, expr: &Expr) -> Result<Option<StmtKind>, ParseError> {
         let ExprKind::Call { callee, args } = &expr.kind else {
             return Ok(None);
         };
@@ -480,15 +490,9 @@ impl Parser {
         let mut fields = Vec::new();
         let mut methods = Vec::new();
 
-        while !matches!(
-            self.current_kind(),
-            TokenKind::Dedent | TokenKind::Eof
-        ) {
+        while !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
             self.skip_newlines();
-            if matches!(
-                self.current_kind(),
-                TokenKind::Dedent | TokenKind::Eof
-            ) {
+            if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
                 break;
             }
 
@@ -548,15 +552,9 @@ impl Parser {
         self.eat(&TokenKind::Indent)?;
 
         let mut methods = Vec::new();
-        while !matches!(
-            self.current_kind(),
-            TokenKind::Dedent | TokenKind::Eof
-        ) {
+        while !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
             self.skip_newlines();
-            if matches!(
-                self.current_kind(),
-                TokenKind::Dedent | TokenKind::Eof
-            ) {
+            if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
                 break;
             }
             let stmt = self.parse_statement()?;
@@ -633,7 +631,7 @@ impl Parser {
 
     // === 試す ===
 
-    fn parse_try(&mut self, start: Span) -> Result<Stmt, ParseError> {
+    fn parse_try_expr(&mut self, start: Span) -> Result<Expr, ParseError> {
         self.eat(&TokenKind::Tamesu)?;
         self.skip_newlines();
         let body = self.parse_block()?;
@@ -669,16 +667,13 @@ impl Parser {
 
         let end_span = self.tokens[self.pos.saturating_sub(1)].span;
 
-        Ok(Stmt {
-            kind: StmtKind::ExprStmt(Expr {
-                kind: ExprKind::TryCatch {
-                    body,
-                    catch_param,
-                    catch_body,
-                    finally_body,
-                },
-                span: start.merge(end_span),
-            }),
+        Ok(Expr {
+            kind: ExprKind::TryCatch {
+                body,
+                catch_param,
+                catch_body,
+                finally_body,
+            },
             span: start.merge(end_span),
         })
     }
@@ -823,15 +818,9 @@ impl Parser {
         self.eat(&TokenKind::Indent)?;
 
         let mut statements = Vec::new();
-        while !matches!(
-            self.current_kind(),
-            TokenKind::Dedent | TokenKind::Eof
-        ) {
+        while !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
             self.skip_newlines();
-            if matches!(
-                self.current_kind(),
-                TokenKind::Dedent | TokenKind::Eof
-            ) {
+            if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
                 break;
             }
             match self.parse_statement() {
@@ -923,8 +912,10 @@ impl Parser {
         }
 
         // 助詞が続く場合 → 助詞式（呼び出し）構築
-        if matches!(self.current_kind(), TokenKind::Particle(_) | TokenKind::AccessParticle)
-            && !matches!(self.current_kind(), TokenKind::Particle(Particle::Ga))
+        if matches!(
+            self.current_kind(),
+            TokenKind::Particle(_) | TokenKind::AccessParticle
+        ) && !matches!(self.current_kind(), TokenKind::Particle(Particle::Ga))
         {
             expr = self.parse_particle_expr(expr)?;
         }
@@ -991,7 +982,8 @@ impl Parser {
                     }
                     _ => {
                         return Err(ParseError {
-                            message: "「と」の後には「等しい」または「等しくない」が必要です".into(),
+                            message: "「と」の後には「等しい」または「等しくない」が必要です"
+                                .into(),
                             span: self.current_span(),
                         });
                     }
@@ -1082,6 +1074,18 @@ impl Parser {
                     }
 
                     current_expr = self.parse_primary()?;
+                    if let TokenKind::Counter(c) = self.current_kind().clone() {
+                        let end_span = self.current_span();
+                        self.advance();
+                        let span = current_expr.span.merge(end_span);
+                        current_expr = Expr {
+                            kind: ExprKind::WithCounter {
+                                value: Box::new(current_expr),
+                                counter: c,
+                            },
+                            span,
+                        };
+                    }
                 }
                 TokenKind::AccessParticle => {
                     let _particle_span = self.current_span();
@@ -1208,7 +1212,11 @@ impl Parser {
                 | TokenKind::KuriKaesu
                 | TokenKind::Tsukau
                 | TokenKind::Tsukuru
-        ) && !matches!(self.peek_ahead(1), TokenKind::Particle(_) | TokenKind::AccessParticle)
+                | TokenKind::Uttaeru
+        ) && !matches!(
+            self.peek_ahead(1),
+            TokenKind::Particle(_) | TokenKind::AccessParticle
+        )
     }
 
     /// 動詞をパースする
@@ -1247,10 +1255,7 @@ impl Parser {
                 span: self.current_span(),
             }),
             _ => Err(ParseError {
-                message: format!(
-                    "動詞が必要ですが、「{}」がありました",
-                    self.current_kind()
-                ),
+                message: format!("動詞が必要ですが、「{}」がありました", self.current_kind()),
                 span: self.current_span(),
             }),
         }
@@ -1352,6 +1357,7 @@ impl Parser {
             TokenKind::LBrace => self.parse_map_literal(),
             TokenKind::LParen => self.parse_paren_or_lambda(),
             TokenKind::Moshi => self.parse_if_expr(start),
+            TokenKind::Tamesu => self.parse_try_expr(start),
             TokenKind::Identifier(name) => {
                 self.advance();
                 Ok(Expr {
@@ -1360,20 +1366,13 @@ impl Parser {
                 })
             }
             _ => Err(ParseError {
-                message: format!(
-                    "式が必要ですが、「{}」がありました",
-                    self.current_kind()
-                ),
+                message: format!("式が必要ですが、「{}」がありました", self.current_kind()),
                 span: start,
             }),
         }
     }
 
-    fn parse_string_interp(
-        &mut self,
-        initial: String,
-        start: Span,
-    ) -> Result<Expr, ParseError> {
+    fn parse_string_interp(&mut self, initial: String, start: Span) -> Result<Expr, ParseError> {
         let mut parts = Vec::new();
         if !initial.is_empty() {
             parts.push(StringPart::Literal(initial));
@@ -1414,10 +1413,7 @@ impl Parser {
         self.eat(&TokenKind::LBracket)?;
 
         let mut elements = Vec::new();
-        while !matches!(
-            self.current_kind(),
-            TokenKind::RBracket | TokenKind::Eof
-        ) {
+        while !matches!(self.current_kind(), TokenKind::RBracket | TokenKind::Eof) {
             let elem = self.parse_expr()?;
             elements.push(elem);
             if matches!(self.current_kind(), TokenKind::Comma) {
@@ -1441,10 +1437,7 @@ impl Parser {
         self.eat(&TokenKind::LBrace)?;
 
         let mut entries = Vec::new();
-        while !matches!(
-            self.current_kind(),
-            TokenKind::RBrace | TokenKind::Eof
-        ) {
+        while !matches!(self.current_kind(), TokenKind::RBrace | TokenKind::Eof) {
             let (key, _) = self.eat_identifier()?;
             self.eat(&TokenKind::Colon)?;
             let value = self.parse_expr()?;
@@ -1493,15 +1486,9 @@ impl Parser {
         let mut stmts = Vec::new();
 
         // RParen が出るまで文を読む
-        while !matches!(
-            self.current_kind(),
-            TokenKind::RParen | TokenKind::Eof
-        ) {
+        while !matches!(self.current_kind(), TokenKind::RParen | TokenKind::Eof) {
             self.skip_newlines();
-            if matches!(
-                self.current_kind(),
-                TokenKind::RParen | TokenKind::Eof
-            ) {
+            if matches!(self.current_kind(), TokenKind::RParen | TokenKind::Eof) {
                 break;
             }
             let stmt = self.parse_statement()?;

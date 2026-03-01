@@ -148,12 +148,8 @@ impl Compiler {
                 } else {
                     self.errors.push(CompileError {
                         message: match &stmt.kind {
-                            StmtKind::Continue => {
-                                "「次へ」はループの中でのみ使えます".into()
-                            }
-                            StmtKind::Break => {
-                                "「抜ける」はループの中でのみ使えます".into()
-                            }
+                            StmtKind::Continue => "「次へ」はループの中でのみ使えます".into(),
+                            StmtKind::Break => "「抜ける」はループの中でのみ使えます".into(),
                             _ => unreachable!(),
                         },
                     });
@@ -429,7 +425,12 @@ impl Compiler {
                 let _ = counter;
             }
 
-            ExprKind::TryCatch { body, catch_param, catch_body, finally_body } => {
+            ExprKind::TryCatch {
+                body,
+                catch_param,
+                catch_body,
+                finally_body,
+            } => {
                 // SetupTry: catchラベルは後でパッチ
                 let setup_pos = self.emit(OpCode::SetupTry(0));
 
@@ -492,7 +493,10 @@ impl Compiler {
         match callee {
             "表示する" => {
                 // 引数をコンパイル (「と」引数を探す)
-                if let Some(arg) = args.iter().find(|a| a.particle == crate::token::Particle::To) {
+                if let Some(arg) = args
+                    .iter()
+                    .find(|a| a.particle == crate::token::Particle::To)
+                {
                     self.compile_expr(&arg.value);
                 } else if let Some(arg) = args.first() {
                     self.compile_expr(&arg.value);
@@ -686,13 +690,7 @@ impl Compiler {
         self.patch_loop_control(exit_pos);
     }
 
-    fn compile_range_loop(
-        &mut self,
-        from: &Expr,
-        to: &Expr,
-        var: &Option<String>,
-        body: &Block,
-    ) {
+    fn compile_range_loop(&mut self, from: &Expr, to: &Expr, var: &Option<String>, body: &Block) {
         let end_name = self.fresh_temp("__範囲終");
         let index_name = self.fresh_temp("__範囲i");
 

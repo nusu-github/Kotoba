@@ -28,6 +28,38 @@ cases:
     input: |
       しながら
 
+  - id: CHECK-REJECT-004
+    mode: check
+    expect: reject
+    input: |
+      足す という 手順【左:を、右:に】
+        左と右の和を 返す
+      結果 は 1を 足す
+
+  - id: CHECK-REJECT-005
+    mode: check
+    expect: reject
+    input: |
+      値 は 1秒が 2メートル より 大きい
+
+  - id: CHECK-REJECT-006
+    mode: check
+    expect: reject
+    input: |
+      値 は 1秒と2メートルの和
+
+  - id: CHECK-REJECT-007
+    mode: check
+    expect: reject
+    input: |
+      次へ
+
+  - id: CHECK-REJECT-008
+    mode: check
+    expect: reject
+    input: |
+      抜ける
+
   - id: RUN-ACCEPT-001
     mode: run
     expect: accept
@@ -41,3 +73,24 @@ cases:
     expect: reject
     input: |
       「だめ」と 訴える
+
+  - id: RUN-ACCEPT-002
+    mode: run
+    expect: accept
+    input: |
+      結果 は 試す
+        1
+      必ず行う
+        999
+      結果と 表示する
+
+  - id: RUN-REJECT-002
+    mode: run
+    expect: reject
+    input: |
+      結果 は 試す
+        「元の例外」と 訴える
+      失敗した場合【e:で】
+        e
+      必ず行う
+        「後の例外」と 訴える

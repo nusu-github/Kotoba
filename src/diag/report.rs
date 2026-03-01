@@ -43,17 +43,20 @@ impl Diagnostic {
 pub fn render(diag: &Diagnostic, source: Option<&SourceFile>) {
     match (diag.span, source) {
         (Some(span), Some(src)) => {
-            let mut report = Report::build(ReportKind::Error, (src.name.clone(), span.start..span.end))
-                .with_message(format!("{:?}: {}", diag.kind, diag.message))
-                .with_label(
-                    Label::new((src.name.clone(), span.start..span.end))
-                        .with_color(Color::Red)
-                        .with_message(diag.message.clone()),
-                );
+            let mut report =
+                Report::build(ReportKind::Error, (src.name.clone(), span.start..span.end))
+                    .with_message(format!("{:?}: {}", diag.kind, diag.message))
+                    .with_label(
+                        Label::new((src.name.clone(), span.start..span.end))
+                            .with_color(Color::Red)
+                            .with_message(diag.message.clone()),
+                    );
             if let Some(hint) = &diag.hint {
                 report = report.with_note(hint.clone());
             }
-            let _ = report.finish().print((src.name.clone(), Source::from(src.content.clone())));
+            let _ = report
+                .finish()
+                .print((src.name.clone(), Source::from(src.content.clone())));
         }
         _ => {
             eprintln!("{:?}: {}", diag.kind, diag.message);

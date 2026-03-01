@@ -216,7 +216,11 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
         let Some(module) = builder.modules.get(module_path) else {
             continue;
         };
-        let policy = builder.policies.get(module_path).cloned().unwrap_or_default();
+        let policy = builder
+            .policies
+            .get(module_path)
+            .cloned()
+            .unwrap_or_default();
 
         let mut exported = exported_statements(module);
         if !policy.full {

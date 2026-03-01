@@ -196,18 +196,13 @@ pub enum ExprKind {
     Loop(Box<LoopKind>),
 
     /// て形チェイン（パイプライン）
-    TeChain {
-        steps: Vec<ChainStep>,
-    },
+    TeChain { steps: Vec<ChainStep> },
 
     /// 分岐して（チェイン途中の分岐）
     BranchChain { if_expr: Box<Expr> },
 
     /// 無名手順（ラムダ）: `（【x:を】xとxの積を返す）`
-    Lambda {
-        params: Vec<Param>,
-        body: Block,
-    },
+    Lambda { params: Vec<Param>, body: Block },
 
     /// 試す〜失敗した場合〜必ず行う
     TryCatch {
@@ -221,10 +216,7 @@ pub enum ExprKind {
     Throw(Box<Expr>),
 
     /// 助数詞付き数値: `5秒`
-    WithCounter {
-        value: Box<Expr>,
-        counter: String,
-    },
+    WithCounter { value: Box<Expr>, counter: String },
 
     /// 組のインスタンス生成: `人を作る【名前:「太郎」、年齢: 25】`
     Construct {
@@ -284,12 +276,12 @@ pub enum UnaryOp {
 /// 比較演算子
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompOp {
-    Gt,  // より大きい
-    Lt,  // より小さい
-    Eq,  // と等しい
-    Ne,  // と等しくない
-    Ge,  // 以上
-    Le,  // 以下
+    Gt, // より大きい
+    Lt, // より小さい
+    Eq, // と等しい
+    Ne, // と等しくない
+    Ge, // 以上
+    Le, // 以下
 }
 
 /// 論理演算子

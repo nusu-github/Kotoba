@@ -1,6 +1,6 @@
+use kotoba::frontend::ast::StmtKind;
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
-use kotoba::frontend::ast::StmtKind;
 
 #[test]
 fn parser_accepts_proc_def() {
@@ -44,4 +44,13 @@ fn parser_converts_from_use_statement() {
         }
         other => panic!("Use文が期待されました: {:?}", other),
     }
+}
+
+#[test]
+fn parser_accepts_try_as_expression_in_binding() {
+    let src = "結果 は 試す\n  1\n失敗した場合\n  2";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
 }

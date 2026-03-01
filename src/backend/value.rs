@@ -253,7 +253,10 @@ impl Chunk {
     /// ジャンプ命令のターゲットを修正する
     pub fn patch_jump(&mut self, pos: usize, target: usize) {
         match &mut self.code[pos] {
-            OpCode::Jump(t) | OpCode::JumpIfFalse(t) | OpCode::JumpIfTrue(t) | OpCode::SetupTry(t) => {
+            OpCode::Jump(t)
+            | OpCode::JumpIfFalse(t)
+            | OpCode::JumpIfTrue(t)
+            | OpCode::SetupTry(t) => {
                 *t = target;
             }
             _ => panic!("ジャンプ命令以外をパッチしようとしました"),
@@ -262,7 +265,10 @@ impl Chunk {
 
     /// デバッグ用: バイトコードのダンプ
     pub fn disassemble(&self) -> String {
-        let mut out = format!("=== {} (引数:{}, 局所変数:{}) ===\n", self.name, self.arity, self.local_count);
+        let mut out = format!(
+            "=== {} (引数:{}, 局所変数:{}) ===\n",
+            self.name, self.arity, self.local_count
+        );
         for (i, op) in self.code.iter().enumerate() {
             out.push_str(&format!("{:04}  {:?}\n", i, op));
         }

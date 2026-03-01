@@ -34,9 +34,7 @@ enum Command {
         debug_vm: bool,
     },
     /// 静的検証のみ行う
-    Check {
-        file: PathBuf,
-    },
+    Check { file: PathBuf },
     /// 適合ケースを実行する
     Test {
         #[arg(long)]
@@ -122,7 +120,10 @@ fn compile_program(
         }
     };
 
-    Ok(CompileArtifacts { source_file, chunks })
+    Ok(CompileArtifacts {
+        source_file,
+        chunks,
+    })
 }
 
 fn compile_text(name: String, source_code: String) -> Result<CompileArtifacts, Vec<DiagEntry>> {
