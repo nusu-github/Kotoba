@@ -1,5 +1,5 @@
 use kotoba::common::source::Span;
-use kotoba::frontend::ast::StmtKind;
+use kotoba::frontend::ast::{BinOp, ExprKind, StmtKind};
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
 use kotoba::frontend::token::{Token, TokenKind};
@@ -196,6 +196,33 @@ fn parser_reports_missing_closing_delimiter_and_recovers() {
         "program.statements={:?}",
         program.statements
     );
+}
+
+#[test]
+fn parser_lowers_mod_expression_in_comparison() {
+    let src = "もし iを 2で 割った余りが0と等しい ならば\n  1\n";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let stmt = program
+        .statements
+        .first()
+        .expect("expected one statement in program");
+    let StmtKind::ExprStmt(expr) = &stmt.kind else {
+        panic!("if statement expected, got {:?}", stmt.kind);
+    };
+    let ExprKind::If { condition, .. } = &expr.kind else {
+        panic!("if expression expected, got {:?}", expr.kind);
+    };
+    let ExprKind::Comparison { left, .. } = &condition.kind else {
+        panic!("comparison expected, got {:?}", condition.kind);
+    };
+    match &left.kind {
+        ExprKind::BinaryOp { op, .. } => assert_eq!(*op, BinOp::Mod),
+        other => panic!("mod binary op expected, got {:?}", other),
+    }
 }
 
 #[test]

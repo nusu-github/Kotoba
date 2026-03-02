@@ -1955,6 +1955,12 @@ impl Parser {
             });
         }
 
+        if let Some(expr) =
+            Self::lower_arithmetic_call(&callee, &args, start_span.merge(end_span))
+        {
+            return Ok(expr);
+        }
+
         if callee == "訴える" {
             if args.len() != 1 || args[0].particle != Particle::To {
                 return Err(ParseError {
@@ -1989,10 +1995,11 @@ impl Parser {
                 | TokenKind::Tsukuru
                 | TokenKind::Uttaeru
                 | TokenKind::Kou
-        ) && !matches!(
-            self.peek_ahead(1),
-            TokenKind::Particle(_) | TokenKind::AccessParticle
-        )
+        ) && !matches!(self.peek_ahead(1), TokenKind::AccessParticle)
+            && !matches!(
+                self.peek_ahead(1),
+                TokenKind::Particle(p) if *p != Particle::Ga
+            )
     }
 
     /// 動詞をパースする
@@ -2366,5 +2373,36 @@ fn arithmetic_op(word: &str) -> Option<BinOp> {
         "差" => Some(BinOp::Sub),
         "積" => Some(BinOp::Mul),
         _ => None,
+    }
+}
+
+impl Parser {
+    fn lower_arithmetic_call(
+        callee: &str,
+        args: &[ParticleArg],
+        span: Span,
+    ) -> Option<Expr> {
+        if args.len() != 2 {
+            return None;
+        }
+
+        if args[0].particle != Particle::Wo || args[1].particle != Particle::De {
+            return None;
+        }
+
+        let op = match callee {
+            "割る" => BinOp::Div,
+            "割った余り" => BinOp::Mod,
+            _ => return None,
+        };
+
+        Some(Expr {
+            kind: ExprKind::BinaryOp {
+                op,
+                left: Box::new(args[0].value.clone()),
+                right: Box::new(args[1].value.clone()),
+            },
+            span,
+        })
     }
 }

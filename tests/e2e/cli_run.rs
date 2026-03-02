@@ -48,3 +48,28 @@ fn cli_run_reads_input_suru() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("太郎"), "stdout={stdout}");
 }
+
+#[test]
+fn cli_run_mod_comparison_executes() {
+    let bin = env!("CARGO_BIN_EXE_kotoba");
+    let path = "target/tmp_cli_mod_comparison.kb";
+    fs::write(
+        path,
+        "i は 5\nもし iを 2で 割った余りが0と等しい ならば\n  「偶数」と 表示する\nそうでなければ\n  「奇数」と 表示する",
+    )
+    .expect("write file");
+
+    let out = Command::new(bin)
+        .arg("run")
+        .arg(path)
+        .output()
+        .expect("run cli");
+
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("奇数"), "stdout={stdout}");
+}
