@@ -6,9 +6,12 @@ use petgraph::algo::{kosaraju_scc, toposort};
 use petgraph::graph::{DiGraph, NodeIndex};
 use tracing::{debug, instrument};
 
-use crate::common::source::SourceFile;
+use crate::common::source::{SourceFile, Span};
 use crate::diag::report::{Diagnostic, DiagnosticKind};
-use crate::frontend::ast::{Program, Stmt, StmtKind};
+use crate::frontend::ast::{
+    Block, ChainStep, Expr, ExprKind, FieldDef, LoopKind, MatchArm, Param, ParticleArg, Pattern,
+    Program, Stmt, StmtKind, StringPart,
+};
 use crate::frontend::lexer::Lexer;
 use crate::frontend::parser::Parser;
 use crate::module::loader::{load_source, normalize_module_path};
@@ -24,6 +27,19 @@ pub struct ModuleDiagnostic {
 pub struct ResolvedProgram {
     pub root_source: SourceFile,
     pub program: Program,
+    pub sources: Vec<MappedSource>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MappedSource {
+    pub base: usize,
+    pub source: SourceFile,
+}
+
+impl MappedSource {
+    fn end(&self) -> usize {
+        self.base + self.source.content.len()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -265,6 +281,11 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
     );
 
     let mut merged = Vec::new();
+    let mut sources = vec![MappedSource {
+        base: 0,
+        source: root_module.source.clone(),
+    }];
+    let mut next_base = root_module.source.content.len().saturating_add(1);
 
     // dependency -> importer の向きで edge を張っているため、toposort 順で依存が先に来る。
     for node in ordered_nodes {
@@ -285,6 +306,14 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
             .unwrap_or_default();
 
         let mut exported = exported_statements(module);
+        let base = next_base;
+        next_base = next_base
+            .saturating_add(module.source.content.len())
+            .saturating_add(1);
+        sources.push(MappedSource {
+            base,
+            source: module.source.clone(),
+        });
         if !policy.full {
             exported.retain(|stmt| {
                 exported_name(stmt)
@@ -315,7 +344,7 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
             }
         }
 
-        merged.extend(exported);
+        merged.extend(exported.into_iter().map(|stmt| offset_stmt(&stmt, base)));
     }
 
     // ルートの use 文を除いた文を追加。
@@ -327,12 +356,20 @@ pub fn resolve_root_program(root: &Path) -> Result<ResolvedProgram, Vec<ModuleDi
 
     let merged_program = Program {
         statements: merged,
-        span: root_module.program.span,
+        span: Span::new(
+            0,
+            sources
+                .iter()
+                .map(MappedSource::end)
+                .max()
+                .unwrap_or(root_module.source.content.len()),
+        ),
     };
 
     Ok(ResolvedProgram {
         root_source: root_module.source,
         program: merged_program,
+        sources,
     })
 }
 
@@ -422,4 +459,322 @@ fn exported_name(stmt: &Stmt) -> Option<&str> {
 
 fn canonical_like(path: PathBuf) -> PathBuf {
     std::fs::canonicalize(&path).unwrap_or(path)
+}
+
+fn offset_stmt(stmt: &Stmt, offset: usize) -> Stmt {
+    let kind = match &stmt.kind {
+        StmtKind::Bind {
+            name,
+            mutable,
+            value,
+        } => StmtKind::Bind {
+            name: name.clone(),
+            mutable: *mutable,
+            value: offset_expr(value, offset),
+        },
+        StmtKind::Rebind { name, value } => StmtKind::Rebind {
+            name: name.clone(),
+            value: offset_expr(value, offset),
+        },
+        StmtKind::ExprStmt(expr) => StmtKind::ExprStmt(offset_expr(expr, offset)),
+        StmtKind::ProcDef {
+            name,
+            params,
+            body,
+            is_public,
+        } => StmtKind::ProcDef {
+            name: name.clone(),
+            params: params.iter().map(|p| offset_param(p, offset)).collect(),
+            body: offset_block(body, offset),
+            is_public: *is_public,
+        },
+        StmtKind::StructDef {
+            name,
+            fields,
+            methods,
+            is_public,
+        } => StmtKind::StructDef {
+            name: name.clone(),
+            fields: fields.iter().map(|f| offset_field(f, offset)).collect(),
+            methods: methods.iter().map(|m| offset_stmt(m, offset)).collect(),
+            is_public: *is_public,
+        },
+        StmtKind::TraitDef {
+            name,
+            methods,
+            is_public,
+        } => StmtKind::TraitDef {
+            name: name.clone(),
+            methods: methods.iter().map(|m| offset_stmt(m, offset)).collect(),
+            is_public: *is_public,
+        },
+        StmtKind::TraitImpl {
+            type_name,
+            trait_name,
+            methods,
+        } => StmtKind::TraitImpl {
+            type_name: type_name.clone(),
+            trait_name: trait_name.clone(),
+            methods: methods.iter().map(|m| offset_stmt(m, offset)).collect(),
+        },
+        StmtKind::Use { module, items } => StmtKind::Use {
+            module: module.clone(),
+            items: items.clone(),
+        },
+        StmtKind::Return(expr) => StmtKind::Return(expr.as_ref().map(|e| offset_expr(e, offset))),
+        StmtKind::Continue => StmtKind::Continue,
+        StmtKind::Break => StmtKind::Break,
+    };
+
+    Stmt {
+        kind,
+        span: offset_span(stmt.span, offset),
+    }
+}
+
+fn offset_param(param: &Param, offset: usize) -> Param {
+    Param {
+        name: param.name.clone(),
+        particle: param.particle,
+        span: offset_span(param.span, offset),
+    }
+}
+
+fn offset_field(field: &FieldDef, offset: usize) -> FieldDef {
+    FieldDef {
+        name: field.name.clone(),
+        type_name: field.type_name.clone(),
+        span: offset_span(field.span, offset),
+    }
+}
+
+fn offset_block(block: &Block, offset: usize) -> Block {
+    Block {
+        statements: block
+            .statements
+            .iter()
+            .map(|s| offset_stmt(s, offset))
+            .collect(),
+        span: offset_span(block.span, offset),
+    }
+}
+
+fn offset_expr(expr: &Expr, offset: usize) -> Expr {
+    let kind = match &expr.kind {
+        ExprKind::Integer(v) => ExprKind::Integer(v.clone()),
+        ExprKind::Float(v) => ExprKind::Float(v.clone()),
+        ExprKind::StringLiteral(v) => ExprKind::StringLiteral(v.clone()),
+        ExprKind::StringInterp(parts) => ExprKind::StringInterp(
+            parts
+                .iter()
+                .map(|p| match p {
+                    StringPart::Literal(l) => StringPart::Literal(l.clone()),
+                    StringPart::Expr(e) => StringPart::Expr(offset_expr(e, offset)),
+                })
+                .collect(),
+        ),
+        ExprKind::Bool(v) => ExprKind::Bool(*v),
+        ExprKind::None => ExprKind::None,
+        ExprKind::Identifier(name) => ExprKind::Identifier(name.clone()),
+        ExprKind::KosoAdo(k) => ExprKind::KosoAdo(*k),
+        ExprKind::List(values) => {
+            ExprKind::List(values.iter().map(|v| offset_expr(v, offset)).collect())
+        }
+        ExprKind::Map(entries) => ExprKind::Map(
+            entries
+                .iter()
+                .map(|(k, v)| (k.clone(), offset_expr(v, offset)))
+                .collect(),
+        ),
+        ExprKind::Call { callee, args } => ExprKind::Call {
+            callee: callee.clone(),
+            args: args
+                .iter()
+                .map(|a| offset_particle_arg(a, offset))
+                .collect(),
+        },
+        ExprKind::PropertyAccess { object, property } => ExprKind::PropertyAccess {
+            object: Box::new(offset_expr(object, offset)),
+            property: property.clone(),
+        },
+        ExprKind::MethodCall {
+            object,
+            method,
+            args,
+        } => ExprKind::MethodCall {
+            object: Box::new(offset_expr(object, offset)),
+            method: method.clone(),
+            args: args
+                .iter()
+                .map(|a| offset_particle_arg(a, offset))
+                .collect(),
+        },
+        ExprKind::BinaryOp { op, left, right } => ExprKind::BinaryOp {
+            op: *op,
+            left: Box::new(offset_expr(left, offset)),
+            right: Box::new(offset_expr(right, offset)),
+        },
+        ExprKind::UnaryOp { op, operand } => ExprKind::UnaryOp {
+            op: *op,
+            operand: Box::new(offset_expr(operand, offset)),
+        },
+        ExprKind::Comparison { op, left, right } => ExprKind::Comparison {
+            op: *op,
+            left: Box::new(offset_expr(left, offset)),
+            right: Box::new(offset_expr(right, offset)),
+        },
+        ExprKind::Logical { op, left, right } => ExprKind::Logical {
+            op: *op,
+            left: Box::new(offset_expr(left, offset)),
+            right: Box::new(offset_expr(right, offset)),
+        },
+        ExprKind::If {
+            condition,
+            then_block,
+            elif_clauses,
+            else_block,
+        } => ExprKind::If {
+            condition: Box::new(offset_expr(condition, offset)),
+            then_block: offset_block(then_block, offset),
+            elif_clauses: elif_clauses
+                .iter()
+                .map(|(cond, block)| (offset_expr(cond, offset), offset_block(block, offset)))
+                .collect(),
+            else_block: else_block.as_ref().map(|b| offset_block(b, offset)),
+        },
+        ExprKind::Match { target, arms } => ExprKind::Match {
+            target: Box::new(offset_expr(target, offset)),
+            arms: arms
+                .iter()
+                .map(|arm| offset_match_arm(arm, offset))
+                .collect(),
+        },
+        ExprKind::Loop(kind) => ExprKind::Loop(Box::new(offset_loop_kind(kind, offset))),
+        ExprKind::TeChain { steps } => ExprKind::TeChain {
+            steps: steps.iter().map(|s| offset_chain_step(s, offset)).collect(),
+        },
+        ExprKind::BranchChain { if_expr } => ExprKind::BranchChain {
+            if_expr: Box::new(offset_expr(if_expr, offset)),
+        },
+        ExprKind::Lambda { params, body } => ExprKind::Lambda {
+            params: params.iter().map(|p| offset_param(p, offset)).collect(),
+            body: offset_block(body, offset),
+        },
+        ExprKind::TryCatch {
+            body,
+            catch_param,
+            catch_body,
+            finally_body,
+        } => ExprKind::TryCatch {
+            body: offset_block(body, offset),
+            catch_param: catch_param.clone(),
+            catch_body: catch_body.as_ref().map(|b| offset_block(b, offset)),
+            finally_body: finally_body.as_ref().map(|b| offset_block(b, offset)),
+        },
+        ExprKind::Throw(e) => ExprKind::Throw(Box::new(offset_expr(e, offset))),
+        ExprKind::WithCounter { value, counter } => ExprKind::WithCounter {
+            value: Box::new(offset_expr(value, offset)),
+            counter: counter.clone(),
+        },
+        ExprKind::Construct { type_name, fields } => ExprKind::Construct {
+            type_name: type_name.clone(),
+            fields: fields
+                .iter()
+                .map(|(k, v)| (k.clone(), offset_expr(v, offset)))
+                .collect(),
+        },
+        ExprKind::Destructure { pattern, value } => ExprKind::Destructure {
+            pattern: pattern.clone(),
+            value: Box::new(offset_expr(value, offset)),
+        },
+    };
+
+    Expr {
+        kind,
+        span: offset_span(expr.span, offset),
+    }
+}
+
+fn offset_particle_arg(arg: &ParticleArg, offset: usize) -> ParticleArg {
+    ParticleArg {
+        value: offset_expr(&arg.value, offset),
+        particle: arg.particle,
+        span: offset_span(arg.span, offset),
+    }
+}
+
+fn offset_match_arm(arm: &MatchArm, offset: usize) -> MatchArm {
+    MatchArm {
+        pattern: offset_pattern(&arm.pattern, offset),
+        body: offset_block(&arm.body, offset),
+        span: offset_span(arm.span, offset),
+    }
+}
+
+fn offset_pattern(pattern: &Pattern, offset: usize) -> Pattern {
+    match pattern {
+        Pattern::Literal(expr) => Pattern::Literal(offset_expr(expr, offset)),
+        Pattern::Binding(name) => Pattern::Binding(name.clone()),
+        Pattern::Wildcard => Pattern::Wildcard,
+        Pattern::List(elems) => {
+            Pattern::List(elems.iter().map(|p| offset_pattern(p, offset)).collect())
+        }
+        Pattern::Default => Pattern::Default,
+    }
+}
+
+fn offset_loop_kind(kind: &LoopKind, offset: usize) -> LoopKind {
+    match kind {
+        LoopKind::Times { count, var, body } => LoopKind::Times {
+            count: offset_expr(count, offset),
+            var: var.clone(),
+            body: offset_block(body, offset),
+        },
+        LoopKind::Range {
+            from,
+            to,
+            var,
+            body,
+        } => LoopKind::Range {
+            from: offset_expr(from, offset),
+            to: offset_expr(to, offset),
+            var: var.clone(),
+            body: offset_block(body, offset),
+        },
+        LoopKind::While { condition, body } => LoopKind::While {
+            condition: offset_expr(condition, offset),
+            body: offset_block(body, offset),
+        },
+        LoopKind::ForEach {
+            iterable,
+            var,
+            body,
+        } => LoopKind::ForEach {
+            iterable: offset_expr(iterable, offset),
+            var: var.clone(),
+            body: offset_block(body, offset),
+        },
+    }
+}
+
+fn offset_chain_step(step: &ChainStep, offset: usize) -> ChainStep {
+    match step {
+        ChainStep::Call { callee, args } => ChainStep::Call {
+            callee: callee.clone(),
+            args: args
+                .iter()
+                .map(|a| offset_particle_arg(a, offset))
+                .collect(),
+        },
+        ChainStep::Branch { if_expr } => ChainStep::Branch {
+            if_expr: offset_expr(if_expr, offset),
+        },
+    }
+}
+
+fn offset_span(span: Span, offset: usize) -> Span {
+    Span::new(
+        span.start.saturating_add(offset),
+        span.end.saturating_add(offset),
+    )
 }

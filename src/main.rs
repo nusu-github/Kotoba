@@ -11,12 +11,12 @@ use tracing_subscriber::EnvFilter;
 use kotoba::backend::codegen::Compiler;
 use kotoba::backend::rir::{RegProgram, RirProgram};
 use kotoba::backend::vm::RegVM;
-use kotoba::common::source::SourceFile;
+use kotoba::common::source::{SourceFile, Span};
 use kotoba::diag::report::{Diagnostic, DiagnosticKind, render};
 use kotoba::frontend::ast::Program;
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
-use kotoba::module::resolver::{ModuleDiagnostic, resolve_root_program};
+use kotoba::module::resolver::{MappedSource, ModuleDiagnostic, resolve_root_program};
 use kotoba::sema::infer::analyze_typed;
 
 #[derive(Debug, ClapParser)]
@@ -56,6 +56,51 @@ struct CompileArtifacts {
 struct DiagEntry {
     diagnostic: Diagnostic,
     source: Option<SourceFile>,
+}
+
+fn map_diags_with_sources(
+    mut diags: Vec<Diagnostic>,
+    default_source: &SourceFile,
+    source_map: Option<&[MappedSource]>,
+) -> Vec<DiagEntry> {
+    diags
+        .drain(..)
+        .map(|mut diagnostic| {
+            let mapped = diagnostic
+                .span
+                .and_then(|span| source_map.and_then(|m| remap_span(span, m)));
+
+            let source = if let Some((local_span, src)) = mapped {
+                diagnostic.span = Some(local_span);
+                src
+            } else {
+                default_source.clone()
+            };
+
+            DiagEntry {
+                diagnostic,
+                source: Some(source),
+            }
+        })
+        .collect()
+}
+
+fn remap_span(span: Span, source_map: &[MappedSource]) -> Option<(Span, SourceFile)> {
+    source_map
+        .iter()
+        .find(|s| {
+            let end = s.base + s.source.content.len();
+            span.start >= s.base && span.end <= end
+        })
+        .map(|s| {
+            (
+                Span::new(
+                    span.start.saturating_sub(s.base),
+                    span.end.saturating_sub(s.base),
+                ),
+                s.source.clone(),
+            )
+        })
 }
 
 #[derive(Debug, Deserialize)]
@@ -119,18 +164,17 @@ fn init_tracing() {
 fn compile_program(
     program: &Program,
     source_file: SourceFile,
+    source_map: Option<&[MappedSource]>,
 ) -> Result<CompileArtifacts, Vec<DiagEntry>> {
     let _span = info_span!("compile_program").entered();
     let typed = match analyze_typed(program) {
         Ok(typed) => typed,
         Err(sema_errors) => {
-            return Err(sema_errors
-                .into_iter()
-                .map(|d| DiagEntry {
-                    diagnostic: d,
-                    source: Some(source_file.clone()),
-                })
-                .collect());
+            return Err(map_diags_with_sources(
+                sema_errors,
+                &source_file,
+                source_map,
+            ));
         }
     };
 
@@ -157,16 +201,18 @@ fn compile_program(
     })
 }
 
-fn static_check_program(program: &Program, source_file: SourceFile) -> Result<(), Vec<DiagEntry>> {
+fn static_check_program(
+    program: &Program,
+    source_file: SourceFile,
+    source_map: Option<&[MappedSource]>,
+) -> Result<(), Vec<DiagEntry>> {
     let _span = info_span!("static_check_program").entered();
     if let Err(sema_errors) = analyze_typed(program) {
-        return Err(sema_errors
-            .into_iter()
-            .map(|d| DiagEntry {
-                diagnostic: d,
-                source: Some(source_file.clone()),
-            })
-            .collect());
+        return Err(map_diags_with_sources(
+            sema_errors,
+            &source_file,
+            source_map,
+        ));
     };
     Ok(())
 }
@@ -214,7 +260,7 @@ fn compile_text(name: String, source_code: String) -> Result<CompileArtifacts, V
         return Err(diags);
     }
 
-    compile_program(&program, source_file)
+    compile_program(&program, source_file, None)
 }
 
 fn check_text(name: String, source_code: String) -> Result<(), Vec<DiagEntry>> {
@@ -259,7 +305,7 @@ fn check_text(name: String, source_code: String) -> Result<(), Vec<DiagEntry>> {
         return Err(diags);
     }
 
-    static_check_program(&program, source_file)
+    static_check_program(&program, source_file, None)
 }
 
 fn compile_file(path: &PathBuf) -> Result<CompileArtifacts, Vec<DiagEntry>> {
@@ -277,7 +323,11 @@ fn compile_file(path: &PathBuf) -> Result<CompileArtifacts, Vec<DiagEntry>> {
         }
     };
 
-    compile_program(&resolved.program, resolved.root_source)
+    compile_program(
+        &resolved.program,
+        resolved.root_source.clone(),
+        Some(&resolved.sources),
+    )
 }
 
 fn check_file(path: &PathBuf) -> Result<(), Vec<DiagEntry>> {
@@ -295,7 +345,11 @@ fn check_file(path: &PathBuf) -> Result<(), Vec<DiagEntry>> {
         }
     };
 
-    static_check_program(&resolved.program, resolved.root_source)
+    static_check_program(
+        &resolved.program,
+        resolved.root_source.clone(),
+        Some(&resolved.sources),
+    )
 }
 
 fn run_cmd(file: PathBuf, debug_vm: bool) {
