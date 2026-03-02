@@ -59,7 +59,7 @@
 
 ### 実行パイプライン
 
-```
+```text
 ソースファイル
   ↓ 字句解析（logos）
 Token列
@@ -79,7 +79,7 @@ RegVM（レジスタ型VM）
 
 ### RegVM の主要構造
 
-```
+```text
 RegVM
 ├── chunks: Vec<Chunk>         全チャンク（手順ごとのバイトコード）
 ├── stack: Vec<Value>          値スタック（ローカル変数 + 評価スタック）
