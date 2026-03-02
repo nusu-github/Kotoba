@@ -74,6 +74,18 @@ fn lexer_normalizes_identifier_before_particle_split() {
 }
 
 #[test]
+fn lexer_accepts_iteration_mark_in_identifier() {
+    let src = "前々 は 1";
+    let (tokens, errs) = Lexer::new(src).tokenize();
+    assert!(errs.is_empty(), "errs={errs:?}");
+    assert!(
+        tokens
+            .iter()
+            .any(|t| matches!(t.kind, TokenKind::Identifier(ref s) if s == "前々"))
+    );
+}
+
+#[test]
 fn lexer_accepts_ascii_delimiters() {
     let (tokens, errs) = Lexer::new("([{}])").tokenize();
     assert!(errs.is_empty(), "errs={errs:?}");

@@ -96,6 +96,41 @@ fn vm_supports_kou_recursive_call() {
 }
 
 #[test]
+fn vm_catch_param_in_proc_with_finally_no_panic() {
+    // 回帰テスト: 失敗した場合【e:で】 + 必ず行う を含む手順で VM が panic しないこと
+    let src = r#"
+安全に割る という 手順【分子:を、分母:で】
+  結果 は 試す
+    もし 分母が0と等しい ならば
+      「0では割れません」と 訴える
+    そうでなければ
+      分子と 分母の差
+  失敗した場合【問題:で】
+    問題と 表示する
+    0
+  必ず行う
+    「後始末を実行した」と 表示する
+  結果を 返す
+
+最初計算 は 10を 2で 安全に割る
+最初計算と 表示する
+次計算 は 10を 0で 安全に割る
+次計算と 表示する
+"#;
+    let vm = run_src(src).expect("run");
+    assert_eq!(
+        vm.output(),
+        &[
+            "後始末を実行した".to_string(),
+            "8".to_string(),
+            "0では割れません".to_string(),
+            "後始末を実行した".to_string(),
+            "0".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn regvm_runs_program() {
     let src = "x は 1\ny は 2\nxとyの和と 表示する";
     let (tokens, lex_errs) = Lexer::new(src).tokenize();
