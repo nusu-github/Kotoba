@@ -179,6 +179,14 @@ cases:
     input: |
       待つ という 手順
 
+  - id: SYR053
+    mode: check
+    expect: reject
+    input: |
+      人 という 組
+        名前は 文字列
+      太郎 は 人を 作る｛名前:「太郎」｝
+
   - id: SYA001
     mode: check
     expect: accept
@@ -2065,6 +2073,11 @@ catalog:
     verdict: 'reject'
     input_note: '`待つ という 手順`'
     expected_note: '予約語を識別子利用'
+  - id: 'SYR053'
+    norms: ['SYN-001']
+    verdict: 'reject'
+    input_note: '`人 という 組\n  名前は 文字列\n太郎 は 人を 作る｛名前:「太郎」｝`'
+    expected_note: '`組を作る` で旧 `｛｝` 構文を拒否'
   - id: 'SEA001'
     norms: ['SCP-004']
     verdict: 'accept'

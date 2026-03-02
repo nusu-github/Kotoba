@@ -49,6 +49,8 @@ enum RawLex {
     #[token("：")]
     #[token(":")]
     Colon,
+    #[token("→")]
+    Arrow,
     #[token("…")]
     Ellipsis,
     #[regex(r"[0-9０-９]+([\.．][0-9０-９]+)?", lex_number_lexeme)]
@@ -138,6 +140,7 @@ impl<'src> Lexer<'src> {
                 Some(Ok(RawLex::Comma)) => self.push_single(TokenKind::Comma, span_end),
                 Some(Ok(RawLex::Period)) => self.push_single(TokenKind::Period, span_end),
                 Some(Ok(RawLex::Colon)) => self.push_single(TokenKind::Colon, span_end),
+                Some(Ok(RawLex::Arrow)) => self.push_single(TokenKind::Arrow, span_end),
                 Some(Ok(RawLex::Ellipsis)) => self.push_single(TokenKind::Ellipsis, span_end),
                 Some(Err(_)) => {
                     let start = self.pos;

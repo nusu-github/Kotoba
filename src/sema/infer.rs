@@ -16,12 +16,31 @@ struct ProcSignature {
     particle_count: usize,
 }
 
+#[derive(Debug, Clone)]
+struct StructInfo {
+    fields: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+struct TraitMethodSig {
+    particles: Vec<Particle>,
+    return_type: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct TraitInfo {
+    methods: HashMap<String, TraitMethodSig>,
+}
+
 #[derive(Debug)]
 struct Analyzer {
     proc_signatures: HashMap<String, Vec<ProcSignature>>,
+    struct_defs: HashMap<String, StructInfo>,
+    trait_defs: HashMap<String, TraitInfo>,
     diags: Vec<Diagnostic>,
     loop_depth: usize,
     proc_depth: usize,
+    bindings: Vec<HashMap<String, (bool, String)>>,
     steps: usize,
     step_limit: usize,
     limit_reached: bool,
@@ -31,9 +50,12 @@ impl Analyzer {
     fn new(step_limit: usize) -> Self {
         Self {
             proc_signatures: HashMap::new(),
+            struct_defs: HashMap::new(),
+            trait_defs: HashMap::new(),
             diags: Vec::new(),
             loop_depth: 0,
             proc_depth: 0,
+            bindings: vec![HashMap::new()],
             steps: 0,
             step_limit,
             limit_reached: false,
@@ -164,10 +186,43 @@ impl Analyzer {
 
                 self.collect_block(body);
             }
-            StmtKind::StructDef { methods, .. } | StmtKind::TraitDef { methods, .. } => {
-                for method in methods {
-                    self.collect_stmt(method);
+            StmtKind::StructDef { name, fields, .. } => {
+                let mut map = HashMap::new();
+                for field in fields {
+                    map.insert(
+                        field.name.clone(),
+                        field
+                            .type_name
+                            .clone()
+                            .unwrap_or_else(|| "不明".to_string()),
+                    );
                 }
+                self.struct_defs
+                    .insert(name.clone(), StructInfo { fields: map });
+            }
+            StmtKind::TraitDef { name, methods, .. } => {
+                let mut sigs = HashMap::new();
+                for method in methods {
+                    if let StmtKind::ProcDef {
+                        name,
+                        params,
+                        return_type,
+                        ..
+                    } = &method.kind
+                    {
+                        sigs.insert(
+                            name.clone(),
+                            TraitMethodSig {
+                                particles: sorted_unique_particles(
+                                    params.iter().map(|p| p.particle),
+                                ),
+                                return_type: return_type.clone(),
+                            },
+                        );
+                    }
+                }
+                self.trait_defs
+                    .insert(name.clone(), TraitInfo { methods: sigs });
             }
             StmtKind::TraitImpl { methods, .. } => {
                 for method in methods {
@@ -202,15 +257,23 @@ impl Analyzer {
         }
 
         match &stmt.kind {
-            StmtKind::Bind { value, .. } => {
+            StmtKind::Bind {
+                name,
+                mutable,
+                value,
+            } => {
                 self.walk_expr(value, false);
                 self.check_trait_impl_header_without_body(value, stmt.span);
+                let ty = self.infer_expr_type(value);
+                self.define_binding(name, *mutable, ty);
             }
             StmtKind::Rebind { value, .. } => self.walk_expr(value, false),
             StmtKind::ExprStmt(expr) => self.walk_expr(expr, false),
             StmtKind::ProcDef { body, .. } => {
                 self.proc_depth += 1;
+                self.push_scope();
                 self.walk_block(body);
+                self.pop_scope();
                 self.proc_depth = self.proc_depth.saturating_sub(1);
             }
             StmtKind::Return(Some(expr)) => self.walk_expr(expr, false),
@@ -219,7 +282,12 @@ impl Analyzer {
                     self.walk_stmt(m);
                 }
             }
-            StmtKind::TraitImpl { methods, .. } => {
+            StmtKind::TraitImpl {
+                type_name,
+                trait_name,
+                methods,
+            } => {
+                self.check_trait_impl_semantics(type_name, trait_name, methods, stmt.span);
                 for m in methods {
                     self.walk_stmt(m);
                 }
@@ -301,8 +369,9 @@ impl Analyzer {
                     );
                 }
             }
-            ExprKind::PropertyAccess { object, .. } => {
+            ExprKind::PropertyAccess { object, property } => {
                 self.walk_expr(object, true);
+                self.check_property_access(object, property, expr.span);
             }
             ExprKind::Call { callee, args } => {
                 for a in args {
@@ -423,10 +492,11 @@ impl Analyzer {
                 }
             }
             ExprKind::BranchChain { if_expr } => self.walk_expr(if_expr, false),
-            ExprKind::Construct { fields, .. } => {
+            ExprKind::Construct { type_name, fields } => {
                 for (_, v) in fields {
                     self.walk_expr(v, false);
                 }
+                self.check_construct_semantics(type_name, fields, expr.span);
             }
             ExprKind::Destructure { value, .. } => self.walk_expr(value, false),
             _ => {}
@@ -438,8 +508,232 @@ impl Analyzer {
             return;
         }
         self.loop_depth += 1;
+        self.push_scope();
         self.walk_block(block);
+        self.pop_scope();
         self.loop_depth = self.loop_depth.saturating_sub(1);
+    }
+
+    fn push_scope(&mut self) {
+        self.bindings.push(HashMap::new());
+    }
+
+    fn pop_scope(&mut self) {
+        if self.bindings.len() > 1 {
+            self.bindings.pop();
+        }
+    }
+
+    fn define_binding(&mut self, name: &str, mutable: bool, ty: String) {
+        if let Some(scope) = self.bindings.last_mut() {
+            scope.insert(name.to_string(), (mutable, ty));
+        }
+    }
+
+    fn lookup_binding(&self, name: &str) -> Option<&(bool, String)> {
+        self.bindings.iter().rev().find_map(|scope| scope.get(name))
+    }
+
+    fn infer_expr_type(&self, expr: &Expr) -> String {
+        match &expr.kind {
+            ExprKind::Integer(_) | ExprKind::Float(_) => "数".to_string(),
+            ExprKind::StringLiteral(_) | ExprKind::StringInterp(_) => "文字列".to_string(),
+            ExprKind::Bool(_) => "真偽".to_string(),
+            ExprKind::None => "無".to_string(),
+            ExprKind::Identifier(name) => self
+                .lookup_binding(name)
+                .map(|(_, ty)| ty.clone())
+                .unwrap_or_else(|| "不明".to_string()),
+            ExprKind::Construct { type_name, .. } => type_name.clone(),
+            ExprKind::PropertyAccess { object, property } => self
+                .property_type_of(object, property)
+                .unwrap_or_else(|| "不明".to_string()),
+            _ => "不明".to_string(),
+        }
+    }
+
+    fn property_type_of(&self, object: &Expr, property: &str) -> Option<String> {
+        let object_ty = self.infer_expr_type(object);
+        self.struct_defs
+            .get(&object_ty)
+            .and_then(|info| info.fields.get(property).cloned())
+    }
+
+    fn check_construct_semantics(
+        &mut self,
+        type_name: &str,
+        fields: &[(String, Expr)],
+        span: crate::common::source::Span,
+    ) {
+        let Some(info) = self.struct_defs.get(type_name).cloned() else {
+            return;
+        };
+
+        let mut seen = HashSet::new();
+        for (field_name, value_expr) in fields {
+            seen.insert(field_name.clone());
+            let Some(expected_ty) = info.fields.get(field_name) else {
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        format!(
+                            "DGN-012: 「{}」には「{}」フィールドがありません",
+                            type_name, field_name
+                        ),
+                    )
+                    .with_span(value_expr.span)
+                    .with_hint("定義済みフィールド名を指定してください"),
+                );
+                continue;
+            };
+
+            let actual_ty = self.infer_expr_type(value_expr);
+            if actual_ty != "不明" && actual_ty != *expected_ty {
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        format!(
+                            "DGN-011: 「{}」には「{}」が必要ですが「{}」が渡されました",
+                            field_name, expected_ty, actual_ty
+                        ),
+                    )
+                    .with_span(value_expr.span)
+                    .with_hint("フィールド宣言と同じ型の値を指定してください"),
+                );
+            }
+        }
+
+        for field_name in info.fields.keys() {
+            if !seen.contains(field_name) {
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        format!(
+                            "DGN-010: {}を作るには「{}」フィールドの指定が必要です",
+                            type_name, field_name
+                        ),
+                    )
+                    .with_span(span)
+                    .with_hint("不足しているフィールドを `【名前: 値】` に追加してください"),
+                );
+            }
+        }
+    }
+
+    fn check_property_access(
+        &mut self,
+        object: &Expr,
+        property: &str,
+        span: crate::common::source::Span,
+    ) {
+        let object_ty = self.infer_expr_type(object);
+        let Some(info) = self.struct_defs.get(&object_ty) else {
+            return;
+        };
+        if info.fields.contains_key(property) {
+            return;
+        }
+        self.diags.push(
+            Diagnostic::new(
+                DiagnosticKind::Sema,
+                format!(
+                    "DGN-012: 「{}」には「{}」フィールドがありません",
+                    object_ty, property
+                ),
+            )
+            .with_span(span)
+            .with_hint("存在するフィールド名を確認してください"),
+        );
+    }
+
+    fn check_field_rebind_mutability(&mut self, target: &Expr, span: crate::common::source::Span) {
+        let ExprKind::PropertyAccess { object, .. } = &target.kind else {
+            return;
+        };
+        let Some(root_name) = root_identifier(object) else {
+            return;
+        };
+        let Some((mutable, _)) = self.lookup_binding(root_name) else {
+            return;
+        };
+        if *mutable {
+            return;
+        }
+        self.diags.push(
+            Diagnostic::new(
+                DiagnosticKind::Sema,
+                format!(
+                    "DGN-015: 「{}」は不変束縛のためフィールドを変えることができません",
+                    root_name
+                ),
+            )
+            .with_span(span)
+            .with_hint("`変わる` を付けて可変束縛にしてください"),
+        );
+    }
+
+    fn check_trait_impl_semantics(
+        &mut self,
+        type_name: &str,
+        trait_name: &str,
+        methods: &[Stmt],
+        span: crate::common::source::Span,
+    ) {
+        let Some(trait_info) = self.trait_defs.get(trait_name) else {
+            return;
+        };
+
+        let mut impl_methods: HashMap<String, TraitMethodSig> = HashMap::new();
+        for method in methods {
+            if let StmtKind::ProcDef {
+                name,
+                params,
+                return_type,
+                ..
+            } = &method.kind
+            {
+                impl_methods.insert(
+                    name.clone(),
+                    TraitMethodSig {
+                        particles: sorted_unique_particles(params.iter().map(|p| p.particle)),
+                        return_type: return_type.clone(),
+                    },
+                );
+            }
+        }
+
+        for (required_name, required_sig) in &trait_info.methods {
+            let Some(actual_sig) = impl_methods.get(required_name) else {
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        format!(
+                            "DGN-013: 「{}」は「{}」を実装していますが「{}」が定義されていません",
+                            type_name, trait_name, required_name
+                        ),
+                    )
+                    .with_span(span)
+                    .with_hint("特性で宣言されたメソッドをすべて実装してください"),
+                );
+                continue;
+            };
+
+            if required_sig.particles != actual_sig.particles
+                || required_sig.return_type != actual_sig.return_type
+            {
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        format!(
+                            "DGN-014: 「{}」のシグネチャが特性「{}」の宣言と一致しません",
+                            required_name, trait_name
+                        ),
+                    )
+                    .with_span(span)
+                    .with_hint("助詞と戻り型を特性宣言と一致させてください"),
+                );
+            }
+        }
     }
 
     fn check_named_params(&mut self, params: &[Param]) {
@@ -533,6 +827,9 @@ impl Analyzer {
                 let has_wo = args.iter().any(|a| a.particle == Particle::Wo);
                 let has_ni = args.iter().any(|a| a.particle == Particle::Ni);
                 if args.len() == 2 && has_wo && has_ni {
+                    if let Some(target) = args.iter().find(|a| a.particle == Particle::Wo) {
+                        self.check_field_rebind_mutability(&target.value, span);
+                    }
                     return;
                 }
                 self.diags.push(
@@ -619,6 +916,14 @@ fn resolve_analyze_step_limit() -> usize {
         .and_then(|v| v.parse::<usize>().ok())
         .filter(|v| *v > 0)
         .unwrap_or(DEFAULT_ANALYZE_STEP_LIMIT)
+}
+
+fn root_identifier(expr: &Expr) -> Option<&str> {
+    match &expr.kind {
+        ExprKind::Identifier(name) => Some(name),
+        ExprKind::PropertyAccess { object, .. } => root_identifier(object),
+        _ => None,
+    }
 }
 
 fn sorted_unique_particles<I>(iter: I) -> Vec<Particle>

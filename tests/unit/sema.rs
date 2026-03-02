@@ -300,3 +300,51 @@ fn sema_typed_rejects_rebind_type_mismatch() {
         .join("\n");
     assert!(joined.contains("型制約"), "diags={joined}");
 }
+
+#[test]
+fn sema_rejects_missing_struct_field_on_construct() {
+    let src = "点 という 組\n  xは 数\n  yは 数\np は 点を 作る【x: 1】";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-010"), "diags={joined}");
+}
+
+#[test]
+fn sema_rejects_field_rebind_on_immutable_binding() {
+    let src = "点 という 組\n  xは 数\np は 点を 作る【x: 1】\npのxを 2に 変える";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-015"), "diags={joined}");
+}
+
+#[test]
+fn sema_rejects_trait_impl_missing_required_method() {
+    let src = "表示できる という 特性\n  文字列にする という 手順\n人 という 組\n  名前は 文字列\n人 は 表示できるを 持つ\n  別手順 という 手順\n    返す";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("DGN-013"), "diags={joined}");
+}

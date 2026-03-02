@@ -144,6 +144,8 @@ pub enum TokenKind {
     Period,
     /// :
     Colon,
+    /// →
+    Arrow,
     /// …
     Ellipsis,
 

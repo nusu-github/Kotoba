@@ -168,22 +168,17 @@ impl Compiler {
             }
 
             StmtKind::StructDef { name, .. } => {
-                // TODO: 組定義
-                self.errors.push(CompileError {
-                    message: format!("組「{}」の定義は現在未実装です", name),
-                });
+                // 現段階では型情報としてのみ扱う（実行時コード生成は不要）
+                let _ = name;
             }
 
             StmtKind::TraitDef { name, .. } => {
-                self.errors.push(CompileError {
-                    message: format!("特性「{}」の定義は現在未実装です", name),
-                });
+                // 現段階では型情報としてのみ扱う（実行時コード生成は不要）
+                let _ = name;
             }
 
             StmtKind::TraitImpl { .. } => {
-                self.errors.push(CompileError {
-                    message: "特性の実装は現在未実装です".into(),
-                });
+                // 現段階では静的検査で整合確認済み。実行時コード生成は不要。
             }
         }
     }
@@ -510,11 +505,18 @@ impl Compiler {
                 });
                 self.emit(OpCode::PushNone);
             }
-            ExprKind::Construct { .. } => {
-                self.errors.push(CompileError {
-                    message: "組インスタンス生成は現在未実装です".into(),
-                });
-                self.emit(OpCode::PushNone);
+            ExprKind::Construct { type_name, fields } => {
+                let count = fields.len() + 1;
+                for (key, value) in fields {
+                    let key_const = self.add_constant(Value::String(key.clone()));
+                    self.emit(OpCode::Constant(key_const));
+                    self.compile_expr(value);
+                }
+                let type_key_const = self.add_constant(Value::String("__型".to_string()));
+                self.emit(OpCode::Constant(type_key_const));
+                let type_value_const = self.add_constant(Value::String(type_name.clone()));
+                self.emit(OpCode::Constant(type_value_const));
+                self.emit(OpCode::BuildMap(count));
             }
             ExprKind::Destructure { .. } => {
                 self.errors.push(CompileError {
@@ -593,15 +595,39 @@ impl Compiler {
             "変える" => {
                 // 再束縛: `名前を 式に変える`
                 if args.len() >= 2 {
-                    let target = &args[0]; // `を` 引数 = 変数名
-                    let new_value = &args[1]; // `に` 引数 = 新しい値
-                    self.compile_expr(&new_value.value);
-                    if let ExprKind::Identifier(name) = &target.value.kind {
-                        if let Some(idx) = self.resolve_local(name) {
-                            self.emit(OpCode::StoreLocal(idx));
-                        } else {
-                            self.emit(OpCode::StoreGlobal(name.clone()));
+                    let target = args
+                        .iter()
+                        .find(|a| a.particle == Particle::Wo)
+                        .unwrap_or(&args[0]);
+                    let new_value = args
+                        .iter()
+                        .find(|a| a.particle == Particle::Ni)
+                        .unwrap_or(&args[1]);
+                    match &target.value.kind {
+                        ExprKind::Identifier(name) => {
+                            self.compile_expr(&new_value.value);
+                            if let Some(idx) = self.resolve_local(name) {
+                                self.emit(OpCode::StoreLocal(idx));
+                            } else {
+                                self.emit(OpCode::StoreGlobal(name.clone()));
+                            }
                         }
+                        ExprKind::PropertyAccess { object, property } => {
+                            if let ExprKind::Identifier(name) = &object.kind {
+                                if let Some(idx) = self.resolve_local(name) {
+                                    self.emit(OpCode::LoadLocal(idx));
+                                    self.compile_expr(&new_value.value);
+                                    self.emit(OpCode::SetProperty(property.clone()));
+                                    self.emit(OpCode::StoreLocal(idx));
+                                } else {
+                                    self.emit(OpCode::LoadGlobal(name.clone()));
+                                    self.compile_expr(&new_value.value);
+                                    self.emit(OpCode::SetProperty(property.clone()));
+                                    self.emit(OpCode::StoreGlobal(name.clone()));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                     self.emit(OpCode::PushNone);
                     return;

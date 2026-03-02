@@ -512,6 +512,21 @@ impl Parser {
         let body = self.parse_block()?;
         let body_span = body.span;
         let methods = body.statements;
+        if methods.is_empty() {
+            return Err(ParseError {
+                message: "特性実装には1つ以上のメソッド定義が必要です".into(),
+                span: body_span,
+            });
+        }
+        if methods
+            .iter()
+            .any(|stmt| !matches!(stmt.kind, StmtKind::ProcDef { .. }))
+        {
+            return Err(ParseError {
+                message: "特性実装の本体には手順定義のみ記述できます".into(),
+                span: body_span,
+            });
+        }
 
         Ok(Some(Stmt {
             kind: StmtKind::TraitImpl {
@@ -599,6 +614,8 @@ impl Parser {
             Vec::new()
         };
 
+        let return_type = self.parse_optional_return_type()?;
+
         self.skip_newlines();
         let body = self.parse_block()?;
 
@@ -607,11 +624,29 @@ impl Parser {
             kind: StmtKind::ProcDef {
                 name,
                 params,
+                return_type,
                 body,
                 is_public: false,
             },
             span,
         })
+    }
+
+    fn parse_optional_return_type(&mut self) -> Result<Option<String>, ParseError> {
+        if !matches!(self.current_kind(), TokenKind::Arrow) {
+            return Ok(None);
+        }
+        self.advance();
+        match self.current_kind().clone() {
+            TokenKind::Identifier(name) => {
+                self.advance();
+                Ok(Some(name))
+            }
+            _ => Err(ParseError {
+                message: "戻り型の指定には型名が必要です".into(),
+                span: self.current_span(),
+            }),
+        }
     }
 
     fn parse_params(&mut self) -> Result<Vec<Param>, ParseError> {
@@ -674,7 +709,7 @@ impl Parser {
         self.eat(&TokenKind::Indent)?;
 
         let mut fields = Vec::new();
-        let mut methods = Vec::new();
+        let methods = Vec::new();
 
         while !matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
             self.skip_newlines();
@@ -682,42 +717,63 @@ impl Parser {
                 break;
             }
 
-            // フィールド: `名前 は 型名` or メソッド: `名前 という 手順`
-            if let TokenKind::Identifier(_) = self.current_kind() {
-                if matches!(self.peek_ahead(1), TokenKind::ToIu) {
-                    let _method_start = self.current_span();
-                    let stmt = self.parse_statement()?;
-                    methods.push(stmt);
-                } else if matches!(self.peek_ahead(1), TokenKind::Ha) {
-                    let field_start = self.current_span();
-                    let (fname, _) = self.eat_identifier()?;
-                    self.eat(&TokenKind::Ha)?;
-                    let type_name = if let TokenKind::Identifier(t) = self.current_kind().clone() {
-                        self.advance();
-                        Some(t)
-                    } else {
-                        None
-                    };
-                    let field_span = field_start.merge(self.tokens[self.pos - 1].span);
-                    fields.push(FieldDef {
-                        name: fname,
-                        type_name,
-                        span: field_span,
-                    });
-                } else {
-                    let stmt = self.parse_statement()?;
-                    methods.push(stmt);
-                }
-            } else {
-                let stmt = self.parse_statement()?;
-                methods.push(stmt);
+            if !matches!(self.current_kind(), TokenKind::Identifier(_)) {
+                return Err(ParseError {
+                    message: "組の本体には `名前は 型名` 形式のフィールド宣言のみ記述できます"
+                        .into(),
+                    span: self.current_span(),
+                });
             }
+
+            let field_start = self.current_span();
+            let (raw_name, _) = self.eat_identifier()?;
+            let fname = if matches!(self.current_kind(), TokenKind::Ha) {
+                self.advance();
+                raw_name
+            } else if let Some(stripped) = raw_name.strip_suffix('は') {
+                if stripped.is_empty() {
+                    return Err(ParseError {
+                        message: "組の本体には `名前は 型名` 形式のフィールド宣言のみ記述できます"
+                            .into(),
+                        span: field_start,
+                    });
+                }
+                stripped.to_string()
+            } else {
+                return Err(ParseError {
+                    message: "組の本体には `名前は 型名` 形式のフィールド宣言のみ記述できます"
+                        .into(),
+                    span: field_start,
+                });
+            };
+            let type_name = if let TokenKind::Identifier(t) = self.current_kind().clone() {
+                self.advance();
+                Some(t)
+            } else {
+                return Err(ParseError {
+                    message: "フィールド宣言には型名が必要です".into(),
+                    span: self.current_span(),
+                });
+            };
+            let field_span = field_start.merge(self.tokens[self.pos - 1].span);
+            fields.push(FieldDef {
+                name: fname,
+                type_name,
+                span: field_span,
+            });
             self.skip_newlines();
         }
 
         let end_span = self.current_span();
         if matches!(self.current_kind(), TokenKind::Dedent) {
             self.advance();
+        }
+
+        if fields.is_empty() {
+            return Err(ParseError {
+                message: "組には1つ以上のフィールド宣言が必要です".into(),
+                span: start,
+            });
         }
 
         Ok(Stmt {
@@ -743,43 +799,54 @@ impl Parser {
             if matches!(self.current_kind(), TokenKind::Dedent | TokenKind::Eof) {
                 break;
             }
-            if matches!(self.current_kind(), TokenKind::Identifier(_))
+            if !(matches!(self.current_kind(), TokenKind::Identifier(_))
                 && matches!(self.peek_ahead(1), TokenKind::ToIu)
-                && matches!(self.peek_ahead(2), TokenKind::Tejun)
+                && matches!(self.peek_ahead(2), TokenKind::Tejun))
             {
-                let method_start = self.current_span();
-                let (method_name, _) = self.eat_identifier()?;
-                self.eat(&TokenKind::ToIu)?;
-                self.eat(&TokenKind::Tejun)?;
-                let params = if matches!(self.current_kind(), TokenKind::LBracket) {
-                    self.parse_params()?
-                } else {
-                    Vec::new()
-                };
-                let method_end = self.tokens[self.pos.saturating_sub(1)].span;
-                methods.push(Stmt {
-                    kind: StmtKind::ProcDef {
-                        name: method_name,
-                        params,
-                        body: Block {
-                            statements: Vec::new(),
-                            span: method_end,
-                        },
-                        is_public: false,
-                    },
-                    span: method_start.merge(method_end),
+                return Err(ParseError {
+                    message: "特性の本体には `名前 という 手順` 形式のシグネチャのみ記述できます"
+                        .into(),
+                    span: self.current_span(),
                 });
-                self.skip_newlines();
-                continue;
             }
-            let stmt = self.parse_statement()?;
-            methods.push(stmt);
+
+            let method_start = self.current_span();
+            let (method_name, _) = self.eat_identifier()?;
+            self.eat(&TokenKind::ToIu)?;
+            self.eat(&TokenKind::Tejun)?;
+            let params = if matches!(self.current_kind(), TokenKind::LBracket) {
+                self.parse_params()?
+            } else {
+                Vec::new()
+            };
+            let return_type = self.parse_optional_return_type()?;
+            let method_end = self.tokens[self.pos.saturating_sub(1)].span;
+            methods.push(Stmt {
+                kind: StmtKind::ProcDef {
+                    name: method_name,
+                    params,
+                    return_type,
+                    body: Block {
+                        statements: Vec::new(),
+                        span: method_end,
+                    },
+                    is_public: false,
+                },
+                span: method_start.merge(method_end),
+            });
             self.skip_newlines();
         }
 
         let end_span = self.current_span();
         if matches!(self.current_kind(), TokenKind::Dedent) {
             self.advance();
+        }
+
+        if methods.is_empty() {
+            return Err(ParseError {
+                message: "特性には1つ以上のメソッドシグネチャが必要です".into(),
+                span: start,
+            });
         }
 
         Ok(Stmt {
@@ -2006,10 +2073,55 @@ impl Parser {
             });
         }
 
+        if callee == "作る" {
+            if matches!(self.current_kind(), TokenKind::LBrace) {
+                return Err(ParseError {
+                    message: "組の初期化は `【名前: 値】` 形式で記述してください（`｛｝` は廃止されました）"
+                        .into(),
+                    span: self.current_span(),
+                });
+            }
+
+            if args.len() == 1
+                && args[0].particle == Particle::Wo
+                && matches!(args[0].value.kind, ExprKind::Identifier(_))
+                && matches!(self.current_kind(), TokenKind::LBracket)
+            {
+                let type_name = match &args[0].value.kind {
+                    ExprKind::Identifier(name) => name.clone(),
+                    _ => unreachable!(),
+                };
+                let fields = self.parse_construct_fields()?;
+                let end = self.tokens[self.pos.saturating_sub(1)].span;
+                return Ok(Expr {
+                    kind: ExprKind::Construct { type_name, fields },
+                    span: start_span.merge(end),
+                });
+            }
+        }
+
         Ok(Expr {
             kind: ExprKind::Call { callee, args },
             span: start_span.merge(end_span),
         })
+    }
+
+    fn parse_construct_fields(&mut self) -> Result<Vec<(String, Expr)>, ParseError> {
+        self.eat(&TokenKind::LBracket)?;
+        let mut fields = Vec::new();
+        while !matches!(self.current_kind(), TokenKind::RBracket | TokenKind::Eof) {
+            let (name, _) = self.eat_identifier()?;
+            self.eat(&TokenKind::Colon)?;
+            let value = self.parse_expr()?;
+            fields.push((name, value));
+            if matches!(self.current_kind(), TokenKind::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.eat(&TokenKind::RBracket)?;
+        Ok(fields)
     }
 
     /// 動詞位置にあるかを判定

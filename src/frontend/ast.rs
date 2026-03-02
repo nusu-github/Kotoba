@@ -34,6 +34,7 @@ pub enum StmtKind {
     ProcDef {
         name: String,
         params: Vec<Param>,
+        return_type: Option<String>,
         body: Block,
         is_public: bool,
     },

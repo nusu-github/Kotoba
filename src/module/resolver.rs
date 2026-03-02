@@ -480,11 +480,13 @@ fn offset_stmt(stmt: &Stmt, offset: usize) -> Stmt {
         StmtKind::ProcDef {
             name,
             params,
+            return_type,
             body,
             is_public,
         } => StmtKind::ProcDef {
             name: name.clone(),
             params: params.iter().map(|p| offset_param(p, offset)).collect(),
+            return_type: return_type.clone(),
             body: offset_block(body, offset),
             is_public: *is_public,
         },

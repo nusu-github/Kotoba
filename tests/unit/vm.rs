@@ -108,3 +108,19 @@ fn regvm_runs_program() {
     vm.run().expect("run regvm");
     assert_eq!(vm.output(), &["3".to_string()]);
 }
+
+#[test]
+fn vm_constructs_struct_like_value_and_reads_property() {
+    let src =
+        "人 という 組\n  名前は 文字列\n太郎 は 人を 作る【名前:「太郎」】\n太郎の名前と 表示する";
+    let vm = run_src(src).expect("run");
+    assert_eq!(vm.output(), &["太郎".to_string()]);
+}
+
+#[test]
+fn vm_updates_property_with_kaeru_call() {
+    let src =
+        "点 という 組\n  xは 数\n変わる p は 点を 作る【x: 1】\npのxを 2に 変える\npのxと 表示する";
+    let vm = run_src(src).expect("run");
+    assert_eq!(vm.output(), &["2".to_string()]);
+}

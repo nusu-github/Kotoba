@@ -270,6 +270,33 @@ fn parser_accepts_trait_impl_with_body() {
 }
 
 #[test]
+fn parser_accepts_struct_construct_with_brackets() {
+    let src = "人 という 組\n  名前は 文字列\n太郎 は 人を 作る【名前:「太郎」】";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_rejects_struct_construct_with_braces() {
+    let src = "人 という 組\n  名前は 文字列\n太郎 は 人を 作る｛名前:「太郎」｝";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(!parse_errs.is_empty(), "expected parse errors");
+}
+
+#[test]
+fn parser_accepts_trait_signature_with_return_type_arrow() {
+    let src = "表示できる という 特性\n  文字列にする という 手順 → 文字列";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
 fn parser_accepts_foreach_loop() {
     let src = "一覧の それぞれについて【e】\n  eを 表示する";
     let (tokens, lex_errs) = Lexer::new(src).tokenize();

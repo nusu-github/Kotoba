@@ -1,5 +1,6 @@
 ---
 source: tests/unit/frontend_snapshot.rs
+assertion_line: 45
 expression: "normalize_newline(&format!(\"{program:#?}\"))"
 ---
 Program {
@@ -29,6 +30,7 @@ Program {
                         },
                     },
                 ],
+                return_type: None,
                 body: Block {
                     statements: [
                         Stmt {
