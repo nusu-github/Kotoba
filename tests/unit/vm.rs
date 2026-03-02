@@ -1,3 +1,5 @@
+use std::fs;
+
 use kotoba::backend::codegen::Compiler;
 use kotoba::backend::rir::RirProgram;
 use kotoba::backend::vm::RegVM;
@@ -27,6 +29,19 @@ fn vm_executes_addition() {
     let src = "x は 1\ny は 2\nxとyの和と 表示する";
     let vm = run_src(src).expect("run");
     assert_eq!(vm.output(), &["3".to_string()]);
+}
+
+#[test]
+fn vm_reads_and_writes_file_with_builtins() {
+    let path = format!("target/tmp_vm_io_{}.txt", std::process::id());
+    let _ = fs::remove_file(&path);
+    let src =
+        format!("「こんにちは」を 「{path}」に 書く\n内容 は 「{path}」を 読む\n内容と 表示する");
+    let vm = run_src(&src).expect("run");
+    assert_eq!(vm.output(), &["こんにちは".to_string()]);
+    let file = fs::read_to_string(&path).expect("read written file");
+    assert_eq!(file, "こんにちは");
+    let _ = fs::remove_file(&path);
 }
 
 #[test]

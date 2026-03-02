@@ -104,6 +104,8 @@ pub enum TokenKind {
     DeNai,
     /// 表示する
     HyoujiSuru,
+    /// 入力する
+    NyuuryokuSuru,
     /// これ
     Kore,
     /// それ

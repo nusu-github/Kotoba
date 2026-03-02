@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::io;
 
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
@@ -467,6 +469,40 @@ impl RegVM {
                     let text = value.to_display_string();
                     println!("{}", text);
                     self.output.push(text);
+                }
+                OpCode::ReadInput => {
+                    let mut line = String::new();
+                    io::stdin().read_line(&mut line).map_err(|e| RuntimeError {
+                        message: format!("標準入力の読み取りに失敗しました: {e}"),
+                    })?;
+                    let text = line.trim_end_matches(&['\r', '\n'][..]).to_string();
+                    self.stack.push(Value::String(text));
+                }
+                OpCode::ReadFile => {
+                    let path = self.pop_value()?;
+                    let Value::String(path) = path else {
+                        return Err(RuntimeError {
+                            message: "「読む」の対象ファイルは文字列で指定してください".into(),
+                        });
+                    };
+                    let content = fs::read_to_string(&path).map_err(|e| RuntimeError {
+                        message: format!("ファイル「{path}」を読めません: {e}"),
+                    })?;
+                    self.stack.push(Value::String(content));
+                }
+                OpCode::WriteFile => {
+                    let path = self.pop_value()?;
+                    let content = self.pop_value()?;
+                    let Value::String(path) = path else {
+                        return Err(RuntimeError {
+                            message: "「書く」の保存先ファイルは文字列で指定してください".into(),
+                        });
+                    };
+                    let text = content.to_display_string();
+                    fs::write(&path, text).map_err(|e| RuntimeError {
+                        message: format!("ファイル「{path}」へ書けません: {e}"),
+                    })?;
+                    self.stack.push(Value::None);
                 }
 
                 OpCode::Halt => {

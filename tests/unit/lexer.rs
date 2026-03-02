@@ -94,3 +94,14 @@ fn lexer_accepts_ascii_delimiters() {
         ]
     );
 }
+
+#[test]
+fn lexer_recognizes_input_keyword() {
+    let (tokens, errs) = Lexer::new("入力する").tokenize();
+    assert!(errs.is_empty(), "errs={errs:?}");
+    assert!(
+        tokens
+            .iter()
+            .any(|t| matches!(t.kind, TokenKind::NyuuryokuSuru))
+    );
+}

@@ -2,6 +2,7 @@ use num_bigint::BigInt;
 
 use crate::backend::value::{Chunk, OpCode, ProcRef, Value};
 use crate::frontend::ast::*;
+use crate::frontend::token::Particle;
 use crate::sema::hir::TypedHirProgram;
 
 /// コンパイルエラー
@@ -529,10 +530,7 @@ impl Compiler {
         match callee {
             "表示する" => {
                 // 引数をコンパイル (「と」引数を探す)
-                if let Some(arg) = args
-                    .iter()
-                    .find(|a| a.particle == crate::frontend::token::Particle::To)
-                {
+                if let Some(arg) = args.iter().find(|a| a.particle == Particle::To) {
                     self.compile_expr(&arg.value);
                 } else if let Some(arg) = args.first() {
                     self.compile_expr(&arg.value);
@@ -541,6 +539,55 @@ impl Compiler {
                 }
                 self.emit(OpCode::Print);
                 self.emit(OpCode::PushNone); // 表示するは無を返す
+                return;
+            }
+            "入力する" => {
+                if args.is_empty() {
+                    self.emit(OpCode::ReadInput);
+                    return;
+                }
+                self.errors.push(CompileError {
+                    message: "「入力する」は引数を取りません".into(),
+                });
+                self.emit(OpCode::PushNone);
+                return;
+            }
+            "読む" => {
+                if let Some(path_arg) = args
+                    .iter()
+                    .find(|a| a.particle == Particle::Wo)
+                    .or_else(|| args.first())
+                {
+                    self.compile_expr(&path_arg.value);
+                    self.emit(OpCode::ReadFile);
+                    return;
+                }
+                self.errors.push(CompileError {
+                    message: "「読む」は `「ファイル」を 読む` の形で指定してください".into(),
+                });
+                self.emit(OpCode::PushNone);
+                return;
+            }
+            "書く" => {
+                let content_arg = args
+                    .iter()
+                    .find(|a| a.particle == Particle::Wo)
+                    .or_else(|| args.first());
+                let path_arg = args
+                    .iter()
+                    .find(|a| a.particle == Particle::Ni)
+                    .or_else(|| args.get(1));
+                if let (Some(content_arg), Some(path_arg)) = (content_arg, path_arg) {
+                    self.compile_expr(&content_arg.value);
+                    self.compile_expr(&path_arg.value);
+                    self.emit(OpCode::WriteFile);
+                    return;
+                }
+                self.errors.push(CompileError {
+                    message: "「書く」は `「内容」を 「ファイル」に 書く` の形で指定してください"
+                        .into(),
+                });
+                self.emit(OpCode::PushNone);
                 return;
             }
             "変える" => {

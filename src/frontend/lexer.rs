@@ -708,6 +708,7 @@ fn keyword_from_str(word: &str) -> Option<TokenKind> {
         "または" => Some(TokenKind::Mataha),
         "でない" => Some(TokenKind::DeNai),
         "表示する" => Some(TokenKind::HyoujiSuru),
+        "入力する" => Some(TokenKind::NyuuryokuSuru),
         "これ" => Some(TokenKind::Kore),
         "それ" => Some(TokenKind::Sore),
         "あれ" => Some(TokenKind::Are),

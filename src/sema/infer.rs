@@ -528,24 +528,63 @@ impl Analyzer {
         args: &[ParticleArg],
         span: crate::common::source::Span,
     ) {
-        if callee != "変える" {
-            return;
+        match callee {
+            "変える" => {
+                let has_wo = args.iter().any(|a| a.particle == Particle::Wo);
+                let has_ni = args.iter().any(|a| a.particle == Particle::Ni);
+                if args.len() == 2 && has_wo && has_ni {
+                    return;
+                }
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        "「変える」は `対象を 新しい値に 変える` の形で指定してください",
+                    )
+                    .with_span(span)
+                    .with_hint("例: `数を 1に 変える`"),
+                );
+            }
+            "入力する" => {
+                if args.is_empty() {
+                    return;
+                }
+                self.diags.push(
+                    Diagnostic::new(DiagnosticKind::Sema, "「入力する」は引数を取りません")
+                        .with_span(span)
+                        .with_hint("例: `名前 は 入力する`"),
+                );
+            }
+            "読む" => {
+                let has_wo = args.iter().any(|a| a.particle == Particle::Wo);
+                if args.len() == 1 && has_wo {
+                    return;
+                }
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        "「読む」は `「ファイル」を 読む` の形で指定してください",
+                    )
+                    .with_span(span)
+                    .with_hint("例: `内容 は 「data.txt」を 読む`"),
+                );
+            }
+            "書く" => {
+                let has_wo = args.iter().any(|a| a.particle == Particle::Wo);
+                let has_ni = args.iter().any(|a| a.particle == Particle::Ni);
+                if args.len() == 2 && has_wo && has_ni {
+                    return;
+                }
+                self.diags.push(
+                    Diagnostic::new(
+                        DiagnosticKind::Sema,
+                        "「書く」は `「内容」を 「ファイル」に 書く` の形で指定してください",
+                    )
+                    .with_span(span)
+                    .with_hint("例: `「こんにちは」を 「out.txt」に 書く`"),
+                );
+            }
+            _ => {}
         }
-
-        let has_wo = args.iter().any(|a| a.particle == Particle::Wo);
-        let has_ni = args.iter().any(|a| a.particle == Particle::Ni);
-        if args.len() == 2 && has_wo && has_ni {
-            return;
-        }
-
-        self.diags.push(
-            Diagnostic::new(
-                DiagnosticKind::Sema,
-                "「変える」は `対象を 新しい値に 変える` の形で指定してください",
-            )
-            .with_span(span)
-            .with_hint("例: `数を 1に 変える`"),
-        );
     }
 
     fn check_trait_impl_header_without_body(

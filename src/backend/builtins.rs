@@ -1,2 +1,2 @@
 // 最小組み込み。必要に応じて backend/vm.rs 側の特殊処理へ追加する。
-pub const BUILTINS: &[&str] = &["表示する", "変える"];
+pub const BUILTINS: &[&str] = &["表示する", "入力する", "読む", "書く", "変える"];

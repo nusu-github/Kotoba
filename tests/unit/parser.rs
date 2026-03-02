@@ -288,6 +288,15 @@ fn parser_accepts_bare_display_call_statement() {
 }
 
 #[test]
+fn parser_accepts_bare_input_call_statement() {
+    let src = "入力する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (_program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
 fn parser_accepts_match_expression_with_literal_and_default_arm() {
     let src = "値は どれかを調べる\n  1の場合\n    10\n  どれでもない場合\n    0";
     let (tokens, lex_errs) = Lexer::new(src).tokenize();

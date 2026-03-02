@@ -145,6 +145,57 @@ fn sema_rejects_incomplete_rebind_call() {
 }
 
 #[test]
+fn sema_rejects_input_with_arguments() {
+    let src = "「x」を 入力する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("入力する"), "diags={joined}");
+}
+
+#[test]
+fn sema_rejects_invalid_read_signature() {
+    let src = "「a.txt」を 「b.txt」に 読む";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("読む"), "diags={joined}");
+}
+
+#[test]
+fn sema_rejects_invalid_write_signature() {
+    let src = "「x」を 書く";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let diags = analyze(&program);
+    let joined = diags
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("書く"), "diags={joined}");
+}
+
+#[test]
 fn sema_rejects_kou_outside_proc() {
     let (tokens, lex_errs) = Lexer::new("こう").tokenize();
     assert!(lex_errs.is_empty());
@@ -210,6 +261,24 @@ fn sema_builds_typed_hir_symbol_types() {
     let total = typed.symbols.lookup("合計").expect("合計 symbol");
     assert_eq!(seconds.ty, Type::NumberWithDimension("秒".to_string()));
     assert_eq!(total.ty, Type::NumberWithDimension("秒".to_string()));
+}
+
+#[test]
+fn sema_typed_infers_io_builtin_types() {
+    let src = r#"
+名前 は 入力する
+内容 は 「in.txt」を 読む
+"#;
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let typed = analyze_typed(&program).expect("typed hir");
+    let name = typed.symbols.lookup("名前").expect("名前 symbol");
+    let content = typed.symbols.lookup("内容").expect("内容 symbol");
+    assert_eq!(name.ty, Type::String);
+    assert_eq!(content.ty, Type::String);
 }
 
 #[test]

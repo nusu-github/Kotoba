@@ -1267,7 +1267,10 @@ impl Parser {
         if !matches!(self.current_kind(), TokenKind::Comma) {
             if matches!(
                 self.current_kind(),
-                TokenKind::Identifier(_) | TokenKind::HyoujiSuru | TokenKind::BunkiShite
+                TokenKind::Identifier(_)
+                    | TokenKind::HyoujiSuru
+                    | TokenKind::NyuuryokuSuru
+                    | TokenKind::BunkiShite
             ) {
                 return Err(ParseError {
                     message: "て形連鎖には「、」が必要です".into(),
@@ -1436,6 +1439,11 @@ impl Parser {
                 let s = self.current_span();
                 self.advance();
                 ("表示する".to_string(), false, s)
+            }
+            TokenKind::NyuuryokuSuru => {
+                let s = self.current_span();
+                self.advance();
+                ("入力する".to_string(), false, s)
             }
             TokenKind::Kaeru => {
                 let s = self.current_span();
@@ -1974,6 +1982,7 @@ impl Parser {
             self.current_kind(),
             TokenKind::Identifier(_)
                 | TokenKind::HyoujiSuru
+                | TokenKind::NyuuryokuSuru
                 | TokenKind::Kaeru
                 | TokenKind::KuriKaesu
                 | TokenKind::Tsukau
@@ -1996,6 +2005,10 @@ impl Parser {
             TokenKind::HyoujiSuru => {
                 self.advance();
                 Ok("表示する".into())
+            }
+            TokenKind::NyuuryokuSuru => {
+                self.advance();
+                Ok("入力する".into())
             }
             TokenKind::Kaeru => {
                 self.advance();
@@ -2141,6 +2154,16 @@ impl Parser {
                 Ok(Expr {
                     kind: ExprKind::Call {
                         callee: "表示する".into(),
+                        args: Vec::new(),
+                    },
+                    span: start,
+                })
+            }
+            TokenKind::NyuuryokuSuru => {
+                self.advance();
+                Ok(Expr {
+                    kind: ExprKind::Call {
+                        callee: "入力する".into(),
                         args: Vec::new(),
                     },
                     span: start,

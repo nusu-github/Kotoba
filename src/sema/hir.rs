@@ -206,6 +206,9 @@ impl TypedHirBuilder {
                     .collect::<Vec<_>>();
                 match callee.as_str() {
                     "表示する" => Type::None,
+                    "入力する" => Type::String,
+                    "読む" => Type::String,
+                    "書く" => Type::None,
                     "変える" => {
                         if let [target_ty, value_ty] = arg_types.as_slice() {
                             self.constraints.push(TypeConstraint::Equal {
