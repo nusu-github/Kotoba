@@ -1,8 +1,8 @@
 use kotoba::common::source::Span;
-use kotoba::frontend::ast::{BinOp, ExprKind, StmtKind};
+use kotoba::frontend::ast::{BinOp, ExprKind, {ExprKind, StmtKind}};
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
-use kotoba::frontend::token::{Token, TokenKind};
+use kotoba::frontend::token::{Particle, Token, TokenKind};
 
 #[test]
 fn parser_accepts_proc_def() {
@@ -357,4 +357,36 @@ fn parser_accepts_te_chain_with_branch() {
     assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
     let (_program, parse_errs) = Parser::new(tokens).parse();
     assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+}
+
+#[test]
+fn parser_chains_direct_call_result_into_display() {
+    let src = "見出しを 飾ると 表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty(), "lex_errs={lex_errs:?}");
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    assert_eq!(program.statements.len(), 1);
+
+    let StmtKind::ExprStmt(expr) = &program.statements[0].kind else {
+        panic!("ExprStmt expected: {:?}", program.statements[0].kind);
+    };
+
+    let ExprKind::Call { callee, args } = &expr.kind else {
+        panic!("Call expected: {:?}", expr.kind);
+    };
+    assert_eq!(callee, "表示する");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0].particle, Particle::To);
+
+    let ExprKind::Call {
+        callee: inner_callee,
+        args: inner_args,
+    } = &args[0].value.kind
+    else {
+        panic!("nested Call expected: {:?}", args[0].value.kind);
+    };
+    assert_eq!(inner_callee, "飾る");
+    assert_eq!(inner_args.len(), 1);
+    assert_eq!(inner_args[0].particle, Particle::Wo);
 }

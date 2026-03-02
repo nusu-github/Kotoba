@@ -1939,6 +1939,42 @@ impl Parser {
             }
         }
 
+        // `<値を ...> 手順と 動詞` パターンを、手順呼び出しの結果を動詞の `と` 引数に渡す形に解釈する
+        if args.len() >= 2 {
+            if let Some(last) = args.last() {
+                if last.particle == Particle::To
+                    && matches!(last.value.kind, ExprKind::Identifier(_))
+                    && args[..args.len() - 1]
+                        .iter()
+                        .all(|a| a.particle != Particle::To)
+                {
+                    let ExprKind::Identifier(func_name) = &last.value.kind else {
+                        unreachable!("checked by matches! above");
+                    };
+
+                    let call_args = args[..args.len() - 1].to_vec();
+                    let call_span = call_args
+                        .first()
+                        .map(|a| a.span)
+                        .unwrap()
+                        .merge(last.value.span);
+                    let call_expr = Expr {
+                        kind: ExprKind::Call {
+                            callee: func_name.clone(),
+                            args: call_args,
+                        },
+                        span: call_span,
+                    };
+                    let new_span = call_span.merge(last.span);
+                    args = vec![ParticleArg {
+                        value: call_expr,
+                        particle: Particle::To,
+                        span: new_span,
+                    }];
+                }
+            }
+        }
+
         // 動詞（呼び出し先）をパース
         // 現在位置が動詞（識別子 or キーワード動詞）ならそれを消費
         let callee = self.parse_verb()?;
