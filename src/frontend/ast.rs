@@ -1,5 +1,5 @@
-use crate::source::Span;
-use crate::token::Particle;
+use crate::common::source::Span;
+use crate::frontend::token::Particle;
 
 /// AST のルートノード: プログラム全体
 #[derive(Debug, Clone)]

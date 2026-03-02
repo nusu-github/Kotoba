@@ -4,7 +4,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
 use crate::backend::rir::RegProgram;
-use crate::bytecode::{Chunk, OpCode, Value};
+use crate::backend::value::{Chunk, OpCode, ProcRef, Value};
 
 /// VM 実行時エラー
 #[derive(Debug)]
@@ -40,8 +40,8 @@ struct TryFrame {
     chunk_id: usize,
 }
 
-/// スタックベースの仮想マシン
-pub struct VM {
+/// レジスタVM実行器
+pub struct RegVM {
     /// 全チャンク
     chunks: Vec<Chunk>,
     /// 値スタック
@@ -53,11 +53,15 @@ pub struct VM {
     /// try フレームスタック
     try_stack: Vec<TryFrame>,
     /// 出力バッファ（テスト用）
-    pub output: Vec<String>,
+    output: Vec<String>,
 }
 
-impl VM {
-    pub fn new(chunks: Vec<Chunk>) -> Self {
+impl RegVM {
+    pub fn new(program: RegProgram) -> Self {
+        Self::from_chunks(program.into_chunks())
+    }
+
+    fn from_chunks(chunks: Vec<Chunk>) -> Self {
         Self {
             chunks,
             stack: Vec::with_capacity(256),
@@ -127,7 +131,7 @@ impl VM {
                         message: "フレームスタックが空です".into(),
                     })?;
                     let chunk = &self.chunks[frame.chunk_id];
-                    self.stack.push(Value::Procedure(crate::bytecode::ProcRef {
+                    self.stack.push(Value::Procedure(ProcRef {
                         name: chunk.name.clone(),
                         chunk_id: frame.chunk_id,
                         arity: chunk.arity,
@@ -658,25 +662,8 @@ impl VM {
             }),
         }
     }
-}
-
-/// レジスタVM互換ランタイム（内部は段階移行のため既存VMへ委譲）
-pub struct RegVM {
-    inner: VM,
-}
-
-impl RegVM {
-    pub fn new(program: RegProgram) -> Self {
-        Self {
-            inner: VM::new(program.into_chunks()),
-        }
-    }
-
-    pub fn run(&mut self) -> Result<Value, RuntimeError> {
-        self.inner.run()
-    }
 
     pub fn output(&self) -> &[String] {
-        &self.inner.output
+        &self.output
     }
 }

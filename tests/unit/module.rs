@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use kotoba::backend::codegen::Compiler;
-use kotoba::backend::vm::VM;
+use kotoba::backend::rir::RirProgram;
+use kotoba::backend::vm::RegVM;
 use kotoba::module::resolver::resolve_root_program;
 
 fn temp_dir(prefix: &str) -> PathBuf {
@@ -38,9 +39,10 @@ fn module_resolver_imports_public_symbol() {
     let chunks = Compiler::new()
         .compile(&resolved.program)
         .expect("compile resolved program");
-    let mut vm = VM::new(chunks);
+    let rir = RirProgram::from_chunks(&chunks);
+    let mut vm = RegVM::new(rir.into_reg_program());
     vm.run().expect("run");
-    assert_eq!(vm.output, vec!["3"]);
+    assert_eq!(vm.output(), &["3".to_string()]);
 }
 
 #[test]

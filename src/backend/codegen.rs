@@ -1,7 +1,7 @@
 use num_bigint::BigInt;
 
-use crate::ast::*;
-use crate::bytecode::{Chunk, OpCode, ProcRef, Value};
+use crate::backend::value::{Chunk, OpCode, ProcRef, Value};
+use crate::frontend::ast::*;
 use crate::sema::hir::TypedHirProgram;
 
 /// コンパイルエラー
@@ -531,7 +531,7 @@ impl Compiler {
                 // 引数をコンパイル (「と」引数を探す)
                 if let Some(arg) = args
                     .iter()
-                    .find(|a| a.particle == crate::token::Particle::To)
+                    .find(|a| a.particle == crate::frontend::token::Particle::To)
                 {
                     self.compile_expr(&arg.value);
                 } else if let Some(arg) = args.first() {

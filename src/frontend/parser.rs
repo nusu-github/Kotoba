@@ -1,7 +1,7 @@
-use crate::ast::*;
+use crate::common::source::Span;
+use crate::frontend::ast::*;
 use crate::frontend::grammar::normalize_token_stream;
-use crate::source::Span;
-use crate::token::{Particle, Token, TokenKind};
+use crate::frontend::token::{Particle, Token, TokenKind};
 use tracing::instrument;
 
 const DEFAULT_PARSE_STEP_LIMIT: usize = 500_000;

@@ -1,10 +1,10 @@
 use kotoba::backend::codegen::Compiler;
 use kotoba::backend::rir::RirProgram;
-use kotoba::backend::vm::{RegVM, VM};
+use kotoba::backend::vm::RegVM;
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
 
-fn run_src(src: &str) -> Result<VM, String> {
+fn run_src(src: &str) -> Result<RegVM, String> {
     let (tokens, lex_errs) = Lexer::new(src).tokenize();
     if !lex_errs.is_empty() {
         return Err(format!("lex_errs={lex_errs:?}"));
@@ -16,7 +16,8 @@ fn run_src(src: &str) -> Result<VM, String> {
     let chunks = Compiler::new()
         .compile(&program)
         .map_err(|e| format!("compile_errs={e:?}"))?;
-    let mut vm = VM::new(chunks);
+    let rir = RirProgram::from_chunks(&chunks);
+    let mut vm = RegVM::new(rir.into_reg_program());
     vm.run().map_err(|e| e.to_string())?;
     Ok(vm)
 }
@@ -25,7 +26,7 @@ fn run_src(src: &str) -> Result<VM, String> {
 fn vm_executes_addition() {
     let src = "x は 1\ny は 2\nxとyの和と 表示する";
     let vm = run_src(src).expect("run");
-    assert_eq!(vm.output, vec!["3"]);
+    assert_eq!(vm.output(), &["3".to_string()]);
 }
 
 #[test]
@@ -38,7 +39,7 @@ fn vm_try_finally_discards_finally_value() {
 結果と 表示する
 "#;
     let vm = run_src(src).expect("run");
-    assert_eq!(vm.output, vec!["1"]);
+    assert_eq!(vm.output(), &["1".to_string()]);
 }
 
 #[test]
@@ -56,7 +57,8 @@ fn vm_try_finally_rethrow_overrides_original() {
     let (program, parse_errs) = Parser::new(tokens).parse();
     assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
     let chunks = Compiler::new().compile(&program).expect("compile");
-    let mut vm = VM::new(chunks);
+    let rir = RirProgram::from_chunks(&chunks);
+    let mut vm = RegVM::new(rir.into_reg_program());
     let err = vm.run().expect_err("must throw");
     let msg = err.to_string();
     assert!(msg.contains("後の例外"), "msg={msg}");
@@ -75,11 +77,11 @@ fn vm_supports_kou_recursive_call() {
 結果と 表示する
 "#;
     let vm = run_src(src).expect("run");
-    assert_eq!(vm.output, vec!["0"]);
+    assert_eq!(vm.output(), &["0".to_string()]);
 }
 
 #[test]
-fn regvm_runs_stack_compatible_program() {
+fn regvm_runs_program() {
     let src = "x は 1\ny は 2\nxとyの和と 表示する";
     let (tokens, lex_errs) = Lexer::new(src).tokenize();
     assert!(lex_errs.is_empty());

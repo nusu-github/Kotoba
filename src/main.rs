@@ -49,7 +49,6 @@ enum Command {
 #[derive(Debug)]
 struct CompileArtifacts {
     source_file: SourceFile,
-    chunks: Vec<kotoba::backend::value::Chunk>,
     reg_program: RegProgram,
 }
 
@@ -154,7 +153,6 @@ fn compile_program(
 
     Ok(CompileArtifacts {
         source_file,
-        chunks,
         reg_program,
     })
 }
@@ -311,7 +309,7 @@ fn run_cmd(file: PathBuf, debug_vm: bool) {
     };
 
     if debug_vm {
-        for c in &artifacts.chunks {
+        for c in artifacts.reg_program.chunks() {
             eprintln!("{}", c.disassemble());
         }
     }

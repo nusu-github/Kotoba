@@ -16,7 +16,7 @@ pub struct RirFunction {
 
 #[derive(Debug, Clone)]
 pub enum RirInst {
-    StackCompat(OpCode),
+    Op(OpCode),
 }
 
 #[derive(Debug, Clone)]
@@ -33,12 +33,7 @@ impl RirProgram {
                 arity: chunk.arity,
                 local_count: chunk.local_count,
                 constants: chunk.constants.clone(),
-                body: chunk
-                    .code
-                    .iter()
-                    .cloned()
-                    .map(RirInst::StackCompat)
-                    .collect(),
+                body: chunk.code.iter().cloned().map(RirInst::Op).collect(),
             })
             .collect();
         Self { functions }
@@ -54,7 +49,7 @@ impl RirProgram {
                     .body
                     .into_iter()
                     .map(|inst| match inst {
-                        RirInst::StackCompat(op) => op,
+                        RirInst::Op(op) => op,
                     })
                     .collect(),
                 constants: func.constants,

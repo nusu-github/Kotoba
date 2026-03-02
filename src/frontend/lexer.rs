@@ -2,8 +2,8 @@ use logos::Logos;
 use tracing::instrument;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::source::Span;
-use crate::token::{Particle, Token, TokenKind};
+use crate::common::source::Span;
+use crate::frontend::token::{Particle, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NumberLexeme {

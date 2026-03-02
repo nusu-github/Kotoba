@@ -1,4 +1,4 @@
-use crate::source::Span;
+use crate::common::source::Span;
 
 /// トークンの種類
 #[derive(Debug, Clone, PartialEq)]

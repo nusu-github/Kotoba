@@ -2,8 +2,8 @@ use chumsky::error::{Rich, RichPattern, RichReason};
 use chumsky::input::Input;
 use chumsky::prelude::*;
 
-use crate::source::Span;
-use crate::token::{Token, TokenKind};
+use crate::common::source::Span;
+use crate::frontend::token::{Token, TokenKind};
 
 type CoreSpan = SimpleSpan<usize>;
 type CoreError<'a> = Rich<'a, TokenKind, CoreSpan>;

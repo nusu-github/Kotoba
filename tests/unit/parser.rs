@@ -1,8 +1,8 @@
+use kotoba::common::source::Span;
 use kotoba::frontend::ast::StmtKind;
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
 use kotoba::frontend::token::{Token, TokenKind};
-use kotoba::source::Span;
 
 #[test]
 fn parser_accepts_proc_def() {
