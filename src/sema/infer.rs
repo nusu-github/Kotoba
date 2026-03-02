@@ -6,6 +6,7 @@ use crate::frontend::ast::{
     StmtKind, StringPart,
 };
 use crate::frontend::token::Particle;
+use crate::sema::hir::{TypedHirProgram, lower_to_typed_hir};
 
 const DEFAULT_ANALYZE_STEP_LIMIT: usize = 500_000;
 
@@ -52,6 +53,39 @@ pub fn analyze_with_limit(program: &Program, step_limit: usize) -> Vec<Diagnosti
     analyzer.collect_program(program);
     analyzer.walk_program(program);
     analyzer.diags
+}
+
+pub fn analyze_typed(program: &Program) -> Result<TypedHirProgram, Vec<Diagnostic>> {
+    analyze_typed_with_limit(program, resolve_analyze_step_limit())
+}
+
+pub fn analyze_typed_with_limit(
+    program: &Program,
+    step_limit: usize,
+) -> Result<TypedHirProgram, Vec<Diagnostic>> {
+    let semantic_diags = analyze_with_limit(program, step_limit);
+    if !semantic_diags.is_empty() {
+        return Err(semantic_diags);
+    }
+
+    let typed = lower_to_typed_hir(program);
+    if typed.constraint_errors.is_empty() {
+        return Ok(typed);
+    }
+
+    let diags = typed
+        .constraint_errors
+        .iter()
+        .map(|err| {
+            Diagnostic::new(
+                DiagnosticKind::Sema,
+                format!("型制約の解決に失敗しました: {}", err.message),
+            )
+            .with_span(err.span)
+            .with_hint("束縛・再束縛・演算に使う値の型整合性を確認してください")
+        })
+        .collect();
+    Err(diags)
 }
 
 impl Analyzer {

@@ -9,14 +9,15 @@ use tracing::{debug, info, info_span, instrument};
 use tracing_subscriber::EnvFilter;
 
 use kotoba::backend::codegen::Compiler;
-use kotoba::backend::vm::VM;
+use kotoba::backend::rir::{RegProgram, RirProgram};
+use kotoba::backend::vm::RegVM;
 use kotoba::common::source::SourceFile;
 use kotoba::diag::report::{Diagnostic, DiagnosticKind, render};
 use kotoba::frontend::ast::Program;
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
 use kotoba::module::resolver::{ModuleDiagnostic, resolve_root_program};
-use kotoba::sema::infer::analyze;
+use kotoba::sema::infer::analyze_typed;
 
 #[derive(Debug, ClapParser)]
 #[command(name = "kotoba")]
@@ -49,6 +50,7 @@ enum Command {
 struct CompileArtifacts {
     source_file: SourceFile,
     chunks: Vec<kotoba::backend::value::Chunk>,
+    reg_program: RegProgram,
 }
 
 #[derive(Debug, Clone)]
@@ -120,18 +122,20 @@ fn compile_program(
     source_file: SourceFile,
 ) -> Result<CompileArtifacts, Vec<DiagEntry>> {
     let _span = info_span!("compile_program").entered();
-    let sema_errors = analyze(program);
-    if !sema_errors.is_empty() {
-        return Err(sema_errors
-            .into_iter()
-            .map(|d| DiagEntry {
-                diagnostic: d,
-                source: Some(source_file.clone()),
-            })
-            .collect());
-    }
+    let typed = match analyze_typed(program) {
+        Ok(typed) => typed,
+        Err(sema_errors) => {
+            return Err(sema_errors
+                .into_iter()
+                .map(|d| DiagEntry {
+                    diagnostic: d,
+                    source: Some(source_file.clone()),
+                })
+                .collect());
+        }
+    };
 
-    let chunks = match Compiler::new().compile(program) {
+    let chunks = match Compiler::new().compile_typed(&typed) {
         Ok(chunks) => chunks,
         Err(errors) => {
             let diags = errors
@@ -145,17 +149,19 @@ fn compile_program(
             return Err(diags);
         }
     };
+    let rir = RirProgram::from_chunks(&chunks);
+    let reg_program = rir.into_reg_program();
 
     Ok(CompileArtifacts {
         source_file,
         chunks,
+        reg_program,
     })
 }
 
 fn static_check_program(program: &Program, source_file: SourceFile) -> Result<(), Vec<DiagEntry>> {
     let _span = info_span!("static_check_program").entered();
-    let sema_errors = analyze(program);
-    if !sema_errors.is_empty() {
+    if let Err(sema_errors) = analyze_typed(program) {
         return Err(sema_errors
             .into_iter()
             .map(|d| DiagEntry {
@@ -163,7 +169,7 @@ fn static_check_program(program: &Program, source_file: SourceFile) -> Result<()
                 source: Some(source_file.clone()),
             })
             .collect());
-    }
+    };
     Ok(())
 }
 
@@ -310,7 +316,7 @@ fn run_cmd(file: PathBuf, debug_vm: bool) {
         }
     }
 
-    let mut vm = VM::new(artifacts.chunks);
+    let mut vm = RegVM::new(artifacts.reg_program);
     if let Err(err) = vm.run() {
         let diag = DiagEntry {
             diagnostic: Diagnostic::new(DiagnosticKind::Runtime, err.to_string())
@@ -432,7 +438,7 @@ fn evaluate_check_case(case: &Case, result: Result<(), Vec<DiagEntry>>) -> CaseE
 fn evaluate_run_case(case: &Case, result: Result<CompileArtifacts, Vec<DiagEntry>>) -> CaseEval {
     match (case.expect.as_str(), result) {
         ("accept", Ok(artifacts)) => {
-            let mut vm = VM::new(artifacts.chunks);
+            let mut vm = RegVM::new(artifacts.reg_program);
             match vm.run() {
                 Ok(_) => CaseEval::Pass,
                 Err(err) => CaseEval::Fail {
@@ -446,7 +452,7 @@ fn evaluate_run_case(case: &Case, result: Result<CompileArtifacts, Vec<DiagEntry
             diags,
         },
         ("reject", Ok(artifacts)) => {
-            let mut vm = VM::new(artifacts.chunks);
+            let mut vm = RegVM::new(artifacts.reg_program);
             match vm.run() {
                 Ok(_) => CaseEval::Fail {
                     reason: "run で拒否期待だったが、実行が成功した".into(),

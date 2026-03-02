@@ -2,6 +2,7 @@ use num_bigint::BigInt;
 
 use crate::ast::*;
 use crate::bytecode::{Chunk, OpCode, ProcRef, Value};
+use crate::sema::hir::TypedHirProgram;
 
 /// コンパイルエラー
 #[derive(Debug)]
@@ -74,6 +75,11 @@ impl Compiler {
         } else {
             Err(self.errors)
         }
+    }
+
+    /// TypedHIR をコンパイルする（現段階では AST ベース実装へ委譲）
+    pub fn compile_typed(self, typed: &TypedHirProgram) -> Result<Vec<Chunk>, Vec<CompileError>> {
+        self.compile(&typed.program)
     }
 
     fn current_chunk(&mut self) -> &mut Chunk {
@@ -479,13 +485,40 @@ impl Compiler {
                 self.emit(OpCode::Throw);
             }
 
-            ExprKind::Match { .. }
-            | ExprKind::TeChain { .. }
-            | ExprKind::BranchChain { .. }
-            | ExprKind::MethodCall { .. }
-            | ExprKind::Construct { .. }
-            | ExprKind::Destructure { .. } => {
-                // TODO: 残りの式の種類
+            ExprKind::Match { .. } => {
+                self.errors.push(CompileError {
+                    message: "「場合分け」は現在未実装です".into(),
+                });
+                self.emit(OpCode::PushNone);
+            }
+            ExprKind::TeChain { .. } => {
+                self.errors.push(CompileError {
+                    message: "て形チェイン実行は現在未実装です".into(),
+                });
+                self.emit(OpCode::PushNone);
+            }
+            ExprKind::BranchChain { .. } => {
+                self.errors.push(CompileError {
+                    message: "「分岐して」実行は現在未実装です".into(),
+                });
+                self.emit(OpCode::PushNone);
+            }
+            ExprKind::MethodCall { .. } => {
+                self.errors.push(CompileError {
+                    message: "メソッド呼び出し実行は現在未実装です".into(),
+                });
+                self.emit(OpCode::PushNone);
+            }
+            ExprKind::Construct { .. } => {
+                self.errors.push(CompileError {
+                    message: "組インスタンス生成は現在未実装です".into(),
+                });
+                self.emit(OpCode::PushNone);
+            }
+            ExprKind::Destructure { .. } => {
+                self.errors.push(CompileError {
+                    message: "分解束縛実行は現在未実装です".into(),
+                });
                 self.emit(OpCode::PushNone);
             }
         }

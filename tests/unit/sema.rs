@@ -1,6 +1,7 @@
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
-use kotoba::sema::infer::{analyze, analyze_with_limit};
+use kotoba::sema::infer::{analyze, analyze_typed, analyze_with_limit};
+use kotoba::sema::types::Type;
 
 #[test]
 fn sema_rejects_standalone_kosoado() {
@@ -191,4 +192,42 @@ fn sema_rejects_kore_inside_te_chain_branch() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(joined.contains("DGN-002"), "diags={joined}");
+}
+
+#[test]
+fn sema_builds_typed_hir_symbol_types() {
+    let src = r#"
+秒数 は 1秒
+合計 は 秒数と2秒の和
+"#;
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let typed = analyze_typed(&program).expect("typed hir");
+    let seconds = typed.symbols.lookup("秒数").expect("秒数 symbol");
+    let total = typed.symbols.lookup("合計").expect("合計 symbol");
+    assert_eq!(seconds.ty, Type::NumberWithDimension("秒".to_string()));
+    assert_eq!(total.ty, Type::NumberWithDimension("秒".to_string()));
+}
+
+#[test]
+fn sema_typed_rejects_rebind_type_mismatch() {
+    let src = r#"
+値 は 真
+値を 1に 変える
+"#;
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+
+    let err = analyze_typed(&program).expect_err("type mismatch should be rejected");
+    let joined = err
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("型制約"), "diags={joined}");
 }

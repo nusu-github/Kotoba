@@ -100,6 +100,31 @@ pub fn normalize_token_stream(tokens: Vec<Token>) -> NormalizedTokenStream {
         .into_output_errors();
     core_errors.extend(declaration_errors);
 
+    let reserved_keyword_slice = {
+        let reserved = select! {
+            kind @ TokenKind::Shinagara => kind,
+            kind @ TokenKind::Matsu => kind,
+            kind @ TokenKind::Haikeide => kind,
+        }
+        .try_map(|_, span| {
+            Err::<(), _>(Rich::custom(
+                span,
+                "DGN-006: 未実装機能です（しながら/待つ/背景で）",
+            ))
+        });
+        let non_reserved = select! {
+            kind if !matches!(kind, TokenKind::Shinagara | TokenKind::Matsu | TokenKind::Haikeide) => ()
+        };
+        choice((reserved, non_reserved))
+    };
+    let reserved_parser = reserved_keyword_slice
+        .repeated()
+        .then_ignore(end::<_, extra::Err<CoreError<'_>>>());
+    let (_, reserved_errors): (_, Vec<CoreError<'_>>) = reserved_parser
+        .parse(spanned.as_slice().split_token_span(eoi))
+        .into_output_errors();
+    core_errors.extend(reserved_errors);
+
     NormalizedTokenStream {
         tokens,
         errors: dedup_errors(core_errors.into_iter().map(map_core_error).collect()),

@@ -1,5 +1,6 @@
 use kotoba::backend::codegen::Compiler;
-use kotoba::backend::vm::VM;
+use kotoba::backend::rir::RirProgram;
+use kotoba::backend::vm::{RegVM, VM};
 use kotoba::frontend::lexer::Lexer;
 use kotoba::frontend::parser::Parser;
 
@@ -75,4 +76,18 @@ fn vm_supports_kou_recursive_call() {
 "#;
     let vm = run_src(src).expect("run");
     assert_eq!(vm.output, vec!["0"]);
+}
+
+#[test]
+fn regvm_runs_stack_compatible_program() {
+    let src = "x は 1\ny は 2\nxとyの和と 表示する";
+    let (tokens, lex_errs) = Lexer::new(src).tokenize();
+    assert!(lex_errs.is_empty());
+    let (program, parse_errs) = Parser::new(tokens).parse();
+    assert!(parse_errs.is_empty(), "parse_errs={parse_errs:?}");
+    let chunks = Compiler::new().compile(&program).expect("compile");
+    let rir = RirProgram::from_chunks(&chunks);
+    let mut vm = RegVM::new(rir.into_reg_program());
+    vm.run().expect("run regvm");
+    assert_eq!(vm.output(), &["3".to_string()]);
 }

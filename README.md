@@ -33,6 +33,11 @@ kotoba test [--filter <CASE_ID>]
 
 `これ/それ/あれ` の単独使用は意味検査で拒否されます。
 
+## 内部パイプライン（現状）
+
+- `AST -> TypedHIR -> RIR -> RegProgram -> RegVM` の流れで処理します。
+- 現段階の `RegVM` は移行互換として既存実行器に委譲しつつ、`RIR/RegProgram` 経路で実行しています。
+
 ## テスト
 
 ```bash

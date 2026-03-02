@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
+use crate::backend::rir::RegProgram;
 use crate::bytecode::{Chunk, OpCode, Value};
 
 /// VM 実行時エラー
@@ -656,5 +657,26 @@ impl VM {
                 message: format!("{}と{}は比較できません", a.type_name(), b.type_name()),
             }),
         }
+    }
+}
+
+/// レジスタVM互換ランタイム（内部は段階移行のため既存VMへ委譲）
+pub struct RegVM {
+    inner: VM,
+}
+
+impl RegVM {
+    pub fn new(program: RegProgram) -> Self {
+        Self {
+            inner: VM::new(program.into_chunks()),
+        }
+    }
+
+    pub fn run(&mut self) -> Result<Value, RuntimeError> {
+        self.inner.run()
+    }
+
+    pub fn output(&self) -> &[String] {
+        &self.inner.output
     }
 }
