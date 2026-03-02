@@ -232,8 +232,6 @@ impl Compiler {
             self.emit(OpCode::Return);
         }
 
-        self.chunks[self.current_chunk_idx].local_count = self.locals.len();
-
         // 状態を復元
         self.current_chunk_idx = prev_chunk_idx;
         self.locals = prev_locals;
