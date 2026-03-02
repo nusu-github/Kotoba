@@ -54,7 +54,7 @@ enum RawLex {
     #[regex(r"[0-9０-９]+([\.．][0-9０-９]+)?", lex_number_lexeme)]
     Number(NumberLexeme),
     #[regex(r"[A-Za-z_][A-Za-z0-9_]*", lex_word_lexeme)]
-    #[regex(r"[ぁ-ゟ゠-ヿ一-龯㐀-䶿豈-﫿ー]+", lex_word_lexeme)]
+    #[regex(r"[ぁ-ゟ゠-ヿ一-龯㐀-䶿豈-﫿ー々]+", lex_word_lexeme)]
     Word(String),
 }
 
