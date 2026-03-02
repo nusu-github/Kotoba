@@ -14,6 +14,16 @@ kotoba test [--filter <CASE_ID>]
 - `check`: 実行せずに静的検証（モジュール解決 + 字句/構文/意味）
 - `test`: `tests/conformance/manifest.yaml` のケースを実行
 
+## サンプル
+
+- `examples/hello.kb`: 基本構文（束縛/条件分岐/手順/一覧）
+- `examples/advanced_recursion.kb`: `こう` を使った末尾再帰
+- `examples/advanced_try_catch.kb`: `試す` / `失敗した場合` / `必ず行う`
+- `examples/advanced_loops.kb`: `繰り返す` / `間 繰り返す` / `次へ` / `抜ける`
+- `examples/advanced_data.kb`: 一覧・対応表・プロパティアクセス
+- `examples/advanced_bigint_and_units.kb`: 任意精度整数と助数詞付き数値
+- `examples/advanced_modules_main.kb`: モジュール分割（`examples/lib/*.kb` を利用）
+
 ## モジュール解決
 
 - `「モジュール」を 使う` は呼び出し元ファイル基準の相対パスで解決します。
